@@ -25,66 +25,108 @@
 
 ## Структура репозитория
 
+Корень репозитория тонкий: единственный файл оркестрации `docker-compose.yml`, документация и по одной папке на микросервис. Каждая папка-сервис **самодостаточна** и повторяет структуру примера `Session_Auth` (свой `src/`, `Dockerfile`, `pyproject.toml`, `uv.lock`, `.env.template`, свой `alembic/` там, где нужна БД).
+
 ```text
 .
-├── .github/
-│   └── pull_request_template.md
-├── docs/
+├── docker-compose.yml          # единственная точка оркестрации
+├── README.md
+├── docs/                       # задание по курсу отчёты по лабораторным
 │   ├── course-assignment.pdf
-│   ├── lab-00/
-│   │   └── report.docx
-│   ├── lab-01/
-│   ├── lab-02/
-│   ├── lab-03/
-│   ├── lab-04/
-│   ├── lab-05/
-│   └── lab-06/
-├── src/
-│   ├── api_service/
-│   ├── recommendation_service/
-│   ├── notification_service/
-│   ├── notification_client/
-│   └── common/
-├── proto/
-├── migrations/
-├── tests/
-│   ├── unit/
-│   └── integration/
-├── infra/
-│   ├── docker/
-│   └── nginx/
-├── scripts/
-├── .env.example
-├── .gitignore
-├── CONTRIBUTING.md
-└── README.md
+│   └── lab-00 … lab-06/
+├── scripts/                    # вспомогательные и демонстрационные скрипты
+│
+├── api_service/                # FastAPI: каталог, регистрация, авторизация, SSR
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   ├── .env.template
+│   ├── src/
+│   └── tests/
+│
+├── recommendation_service/     # gRPC-сервис рекомендаций
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   ├── .env.template
+│   ├── src/
+│   └── tests/
+│
+├── notification_service/       # RabbitMQ consumer + WebSocket
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   ├── .env.template
+│   ├── src/
+│   └── tests/
+│
+└── notification_client/        # клиент уведомлений по WebSocket
+    ├── Dockerfile
+    ├── pyproject.toml
+    ├── .env.template
+    ├── src/
+    └── tests/
 ```
 
 ### Что где хранить
 
 - `docs/` — задание по курсу, отчёты, схемы и материалы по каждой лабораторной.
-- `src/api_service/` — основной FastAPI-сервис, REST API, авторизация, бизнес-логика и доступ к БД.
-- `src/recommendation_service/` — отдельный gRPC-сервис рекомендаций.
-- `src/notification_service/` — RabbitMQ consumer + WebSocket-сервис уведомлений.
-- `src/notification_client/` — клиент, который получает уведомления по WebSocket.
-- `src/common/` — общий код, который действительно нужен нескольким сервисам. Не складывать сюда всё подряд.
-- `proto/` — `.proto`-контракты gRPC.
-- `migrations/` — миграции Alembic.
-- `tests/` — модульные и интеграционные тесты.
-- `infra/` — инфраструктурные файлы Docker/Nginx.
-- `scripts/` — вспомогательные команды и демонстрационные скрипты.
+- `<service>/src/` — код сервиса. Внутренняя раскладка — по образцу `Session_Auth`:
+  `core/` (конфиг, БД, логгер, безопасность), `api/` или `grpc/` (транспортный слой),
+  `services/` (бизнес-логика), `repositories/` (доступ к данным), `models/`, `schemas/`,
+  `alembic/` (миграции). Появляется по мере реализации лабораторных.
+- `<service>/tests/` — модульные и интеграционные тесты сервиса.
+- `<service>/.env.template` — значения окружения по умолчанию (коммитится);
+  реальный `.env` не коммитится.
+- `<service>/Dockerfile` — образ сервиса, контекст сборки — папка самого сервиса.
+- корневой `docker-compose.yml` — поднимает инфраструктуру (PostgreSQL, Redis, RabbitMQ)
+  и все сервисы.
+
+### Планируемая внутренняя структура сервисов
+
+Ниже — ориентир, к которому идёт каждый сервис. На старте внутри `src/` пусто.
+
+- **api_service** — `core/`, `api/` (роутеры: `events`, `registrations`, `auth`, `organizer`),
+  `services/`, `repositories/`, `models/` (+ `mixins/`), `schemas/` (+ `exceptions/`),
+  `clients/` (gRPC-клиент рекомендаций, publisher в RabbitMQ), `alembic/`, `ssr/templates/`.
+- **recommendation_service** — `core/`, `grpc/` (реализация сервисера + сгенерированные стабы),
+  `services/`, `repositories/`, `models/`, `schemas/`, `proto/`, `alembic/`.
+- **notification_service** — `core/`, `consumers/` (обработчики очередей RabbitMQ),
+  `websocket/` (эндпоинты, менеджер подключений), `services/`, `schemas/`.
+- **notification_client** — `core/`, точка входа `main.py`.
+
+## Архитектура: почему так и какие трейдоффы
+
+Выбрана плоская раскладка «папка на микросервис + один `docker-compose.yml`». Общего Python-пакета нет: совпадающий код (конфиг, логгер, обёртки над БД/RabbitMQ, контракты событий и `.proto`) сознательно дублируется между сервисами.
+
+### Плюсы
+
+- **Чистое разделение ответственности.** Логика одного сервиса физически не может обратиться к другому напрямую — только через REST / gRPC / очередь. Это ровно то, что проверяется в курсе.
+- **Независимые зависимости и релизы.** У каждого сервиса свой `pyproject.toml` / `uv.lock`; обновление библиотеки в одном сервисе не задевает остальные.
+- **Простой и быстрый Docker-билд.** Контекст сборки маленький, кэш слоёв не инвалидируется из-за изменений в соседнем сервисе. Dockerfile — почти копия рабочего из `Session_Auth`.
+- **Низкий порог входа.** Каждая папка — знакомый по `Session_Auth` проект; можно открыть один сервис и работать, не держа в голове весь монорепо.
+- **Лёгкий вынос в отдельный репозиторий** позже — папка уже самодостаточна.
+
+### Минусы
+
+- **Дрейф дублированного кода.** Исправление в `core/` одного сервиса не попадает автоматически в остальные; «одинаковые» файлы со временем расходятся.
+- **Контракты не проверяются на этапе импорта.** Схема события или `.proto` лежит в двух местах — рассинхрон ловится только тестами/рантаймом. Нужна дисциплина: менять обе копии в одном PR.
+- **Нет сборки и линтинга «одной командой».** `ruff`, `pytest`, `uv sync` запускаются в каждой папке (или через скрипт-обёртку в `scripts/`).
+- **Дублирование окружения.** Общие параметры (Postgres, RabbitMQ) повторяются в нескольких `.env.template`; при смене — править везде.
+- **Больше boilerplate на старте** — по `Dockerfile`, `pyproject.toml` и `core/` на каждый сервис.
+
+### Средний путь, если дублирование начнёт мешать
+
+Оставить ту же плоскую раскладку, но вынести `.proto` в общий верхнеуровневый `proto/` и генерировать стабы в каждый сервис скриптом. Небольшие общие модули (`config` / `logger` / `db`, ~150 строк) можно осознанно оставить дублированными — это дёшево и стабильно.
 
 ## Лабораторные работы
 
 | ЛР | Содержание | Основные каталоги |
-|---|---|---|
+| --- | --- | --- |
 | 0 | ТЗ, предметная область, БД, архитектура | `docs/lab-00/` |
-| 1 | PostgreSQL, SQLAlchemy, CRUD, тестовый скрипт, Alembic | `src/api_service/`, `migrations/`, `tests/`, `scripts/` |
-| 2 | REST API, FastAPI, Pydantic, JWT, при необходимости Nginx | `src/api_service/`, `infra/nginx/`, `tests/` |
-| 3 | gRPC-сервис рекомендаций | `src/recommendation_service/`, `proto/` |
-| 4 | RabbitMQ, Notification Service, WebSocket-клиент | `src/notification_service/`, `src/notification_client/` |
-| 5 | Docker и Docker Compose | `infra/docker/`, корневой `docker-compose.yml` |
-| 6 | Дополнительный SSR-интерфейс на Jinja2 | внутри `src/api_service/` |
+| 1 | PostgreSQL, SQLAlchemy, CRUD, тестовый скрипт, Alembic | `api_service/`, `scripts/` |
+| 2 | REST API, FastAPI, Pydantic, JWT, при необходимости Nginx | `api_service/` |
+| 3 | gRPC-сервис рекомендаций | `recommendation_service/` |
+| 4 | RabbitMQ, Notification Service, WebSocket-клиент | `notification_service/`, `notification_client/` |
+| 5 | Docker и Docker Compose | все сервисы, корневой `docker-compose.yml` |
+| 6 | Дополнительный SSR-интерфейс на Jinja2 | `api_service/` |
 
 ## Git workflow
 
@@ -94,17 +136,7 @@
 2. `lab/N-name` — интеграционная ветка текущей лабораторной.
 3. `feature/...`, `fix/...`, `docs/...`, `test/...` — короткие ветки конкретных задач.
 
-Пример для ЛР №1:
-
-```text
-main
- └── lab/1-database
-      ├── feature/sqlalchemy-models
-      ├── feature/crud-repositories
-      └── docs/lab-1-report
-```
-
-Feature-ветки вливаются Pull Request'ами в `lab/1-database`. Когда лабораторная готова целиком, делаем итоговый PR `lab/1-database -> main`. После merge ставим тег:
+Feature-ветки вливаются Pull Request'ами в ветку лабораторной. Когда лабораторная готова целиком — итоговый PR `lab/N-name -> main`, после merge ставим тег:
 
 ```bash
 git switch main
@@ -113,25 +145,11 @@ git tag -a lab-1 -m "Lab 1 completed"
 git push origin lab-1
 ```
 
-Рекомендуемые ветки лабораторных:
-
-```text
-lab/1-database
-lab/2-rest-api
-lab/3-grpc-recommendations
-lab/4-notifications
-lab/5-docker
-lab/6-ssr
-```
-
-Подробная инструкция по созданию GitHub-репозитория, приглашению напарника и защите `main` находится в [`docs/GITHUB_SETUP.md`](docs/GITHUB_SETUP.md).
-
 ## Стиль коммитов
 
-Используем короткие понятные сообщения в стиле Conventional Commits:
+Короткие сообщения в стиле Conventional Commits:
 
 ```text
-feat(db): add event and registration models
 feat(api): add event creation endpoint
 feat(grpc): implement recommendation service
 fix(api): prevent registration over capacity
@@ -140,25 +158,12 @@ docs(lab1): add laboratory report
 chore(docker): add compose configuration
 ```
 
-Не стоит делать коммиты вроде `fix`, `new`, `lab`, `123`, `final_final`.
-
-## Работа вдвоём
-
-1. Перед началом работы обновить `main`.
-2. Каждый работает в своей ветке.
-3. Не пушить напрямую в `main`.
-4. На каждую законченную задачу — небольшой логичный commit.
-5. Перед merge — Pull Request и просмотр изменений напарником.
-6. После сдачи лабораторной — тег `lab-N`.
-
 ## Секреты и настройки
 
-Файл `.env` **не коммитится**. В репозитории хранится только `.env.example` без настоящих паролей и секретов.
-
-Пример локальной настройки:
+Реальные `.env` не коммитятся. В репозитории хранится только `.env.template` каждого сервиса без настоящих паролей.
 
 ```bash
-cp .env.example .env
+cp api_service/.env.template api_service/.env
 ```
 
 ## Текущее состояние
@@ -173,8 +178,8 @@ cp .env.example .env
 
 ## Запуск
 
-Команды запуска будут добавляться по мере реализации лабораторных работ. К ЛР №5 весь проект должен запускаться одной командой:
+К ЛР №5 весь проект запускается одной командой:
 
 ```bash
-docker compose up
+docker compose up --build
 ```

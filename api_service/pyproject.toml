@@ -1,0 +1,32 @@
+[project]
+name = "api-service"
+version = "0.1.0"
+description = "FastAPI-сервис: каталог мероприятий, регистрация участников, авторизация, SSR"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic[email]>=2.10",
+    "pydantic-settings>=2.7",
+    "sqlalchemy>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "pyjwt>=2.10",
+    "bcrypt>=4.2",
+    "aio-pika>=9.5",
+    "grpcio>=1.68",
+    "jinja2>=3.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",
+    "ruff>=0.15",
+    "grpcio-tools>=1.68",
+]
+
+[tool.ruff]
+line-length = 100

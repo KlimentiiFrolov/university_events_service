@@ -1,0 +1,20 @@
+[project]
+name = "notification-client"
+version = "0.1.0"
+description = "Клиент, получающий уведомления по WebSocket"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "websockets>=13.0",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.15",
+]
+
+[tool.ruff]
+line-length = 100

@@ -15,7 +15,7 @@ env/
 # Environment / secrets
 .env
 .env.*
-!.env.example
+!.env.template
 
 # Tests / coverage
 .pytest_cache/
