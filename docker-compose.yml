@@ -1,0 +1,83 @@
+# Единственный файл оркестрации. Рядом — по папке на микросервис,
+# каждая самодостаточна (свой Dockerfile, pyproject.toml, .env.template).
+#
+# Полный запуск:  docker compose up --build
+
+name: university-events
+
+networks:
+  backend:
+
+volumes:
+  pg_data:
+  rabbitmq_data:
+
+services:
+  # -------------------------------------------------------------- infra ---
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: events
+      POSTGRES_USER: events
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U events -d events"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ----------------------------------------------------------- services ---
+  api_service:
+    build: ./api_service
+    env_file: ./api_service/.env.template
+    ports:
+      - "8000:8000"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    networks: [backend]
+
+  recommendation_service:
+    build: ./recommendation_service
+    env_file: ./recommendation_service/.env.template
+    ports:
+      - "50051:50051"
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [backend]
+
+  notification_service:
+    build: ./notification_service
+    env_file: ./notification_service/.env.template
+    ports:
+      - "8001:8001"
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    networks: [backend]
+
+  notification_client:
+    build: ./notification_client
+    env_file: ./notification_client/.env.template
+    depends_on:
+      notification_service: { condition: service_started }
+    networks: [backend]
