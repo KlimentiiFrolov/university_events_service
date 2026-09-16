@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CERTS_PATH = BASE_DIR / "core" / "auth" / "certs"
 ENV_FILE = BASE_DIR.parent / ".env"
 ENV_TEMPLATE = BASE_DIR.parent / ".env.template"
 
@@ -29,7 +28,7 @@ class LoggerSettings(BaseModel):
     datefmt: str = "%Y-%m-%d %H:%M:%S"
 
 
-class AuthSettings(BaseModel):
+class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(ENV_TEMPLATE, ENV_FILE),
         case_sensitive=False,
