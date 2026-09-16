@@ -11,7 +11,13 @@ ENV_FILE = BASE_DIR.parent / ".env"
 ENV_TEMPLATE = BASE_DIR.parent / ".env.template"
 
 
-class RuntimeSettings(BaseModel):
+class RuntimeSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(ENV_TEMPLATE, ENV_FILE),
+        case_sensitive=False,
+        extra="ignore",
+    )
+
     host: Annotated[str, Field(default="0.0.0.0", alias="API_HOST")]
     port: Annotated[int, Field(default=8000, alias="API_PORT")]
     reload: bool = True
@@ -29,9 +35,9 @@ class AuthSettings(BaseModel):
         case_sensitive=False,
         extra="ignore",
     )
-    private_key: Path = CERTS_PATH / "jwt-private.pem" # для подписывания токенов (создания)
-    public_key: Path = CERTS_PATH / "jwt-public.pem" # для декодирования токенов
-    algorithm: Annotated[str, Field(default="RS256", alias="JWT_ALGORITHM")]
+
+    secret_key: Annotated[str, Field(alias="JWT_SECRET")]
+    algorithm: Annotated[str, Field(alias="JWT_ALGORITHM")]
     access_token_expire_minutes: Annotated[int, Field(default=15, alias="JWT_ACCESS_TTL_MINUTES")]
     refresh_token_expire_days: int = 30
 
@@ -49,7 +55,7 @@ class RabbitMQSettings(BaseSettings):
 
     rabbit_protocol: str = "amqp"
     rabbit_host: Annotated[str, Field(alias="RABBITMQ_HOST")]
-    rabbit_port: Annotated[str, Field(alias="RABBITMQ_PORT")]
+    rabbit_port: Annotated[int, Field(alias="RABBITMQ_PORT")]
     rabbit_user: Annotated[str, Field(alias="RABBITMQ_USER")]
     rabbit_password: Annotated[str, Field(alias="RABBITMQ_PASSWORD")]
 
@@ -71,8 +77,8 @@ class DatabaseSettings(BaseSettings):
     db_name: Annotated[str, Field(alias="POSTGRES_DB")]
     db_user: Annotated[str, Field(alias="POSTGRES_USER")]
     db_password: Annotated[str, Field(alias="POSTGRES_PASSWORD")]
-    db_host: str = Field(default="localhost", alias="POSTGRES_HOST")
-    db_port: int = Field(default=6000, alias="PGPORT")
+    db_host: Annotated[str, Field(alias="POSTGRES_HOST")]
+    db_port: Annotated[int, Field(alias="PGPORT")]
     db_echo: bool = False
 
     @property
