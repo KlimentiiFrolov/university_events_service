@@ -36,7 +36,7 @@ alembic upgrade head
 5. Откатить миграцию следующим образом 
 
 ```cli
-alembic downgrade -1 (или head)
+alembic downgrade -1 (или base)
 ```
 
 6. Если не хочется накатывать миграции локально, меняя POSTGRES_HOST на localhost, то используем следующие команды
