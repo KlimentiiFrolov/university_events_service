@@ -77,7 +77,7 @@ class DatabaseSettings(BaseSettings):
     db_user: Annotated[str, Field(alias="POSTGRES_USER")]
     db_password: Annotated[str, Field(alias="POSTGRES_PASSWORD")]
     db_host: Annotated[str, Field(alias="POSTGRES_HOST")]
-    db_port: Annotated[int, Field(alias="PGPORT")]
+    db_port: Annotated[int, Field(alias="POSTGRES_PORT")]
     db_echo: bool = False
 
     @property
