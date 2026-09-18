@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from src.models.users import User
 from src.repositories.users import UserRepository
@@ -9,9 +9,8 @@ from src.schemas.exceptions.domain import (
 
 
 class UserService:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-        self.repository = UserRepository(session)
+    def __init__(self, repository: UserRepository):
+        self.repository = repository
 
     async def create_user(
         self,
@@ -32,10 +31,12 @@ class UserService:
             role=role,
         )
 
-        await self.repository.add(user)
-        await self.session.commit()
-
-        return user
+        try:
+            return await self.repository.add(user)
+        except IntegrityError as error:
+            raise ConflictError(
+                f"User with email={email} already exists"
+            ) from error
 
     async def get_user(
         self,
@@ -69,9 +70,7 @@ class UserService:
         if role is not None:
             user.role = role
 
-        await self.session.commit()
-
-        return user
+        return await self.repository.update(user)
 
     async def delete_user(
         self,
@@ -80,5 +79,3 @@ class UserService:
         user = await self.get_user(user_id)
 
         await self.repository.delete(user)
-
-        await self.session.commit()

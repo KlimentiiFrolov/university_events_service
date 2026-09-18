@@ -1,15 +1,11 @@
-from typing import Generic, TypeVar
-
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.base import Base
 
 
-ModelT = TypeVar("ModelT", bound=Base)
-
-
-class BaseRepository(Generic[ModelT]):
+class BaseRepository[ModelT: Base]:
     def __init__(
         self,
         model: type[ModelT],
@@ -32,11 +28,26 @@ class BaseRepository(Generic[ModelT]):
         return list(result.all())
 
     async def add(self, entity: ModelT) -> ModelT:
-        self.session.add(entity)
+        try:
+            self.session.add(entity)
+            await self.session.commit()
+            await self.session.refresh(entity)
+        except IntegrityError:
+            await self.session.rollback()
+            raise
 
-        await self.session.flush()
+        return entity
+
+    async def update(self, entity: ModelT) -> ModelT:
+        try:
+            await self.session.commit()
+            await self.session.refresh(entity)
+        except IntegrityError:
+            await self.session.rollback()
+            raise
 
         return entity
 
     async def delete(self, entity: ModelT) -> None:
         await self.session.delete(entity)
+        await self.session.commit()

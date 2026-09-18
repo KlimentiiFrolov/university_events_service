@@ -221,3 +221,5 @@ __marimo__/
 
 # Public and secrets key
 *.pem
+
+.idea/
