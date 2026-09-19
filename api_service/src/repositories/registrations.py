@@ -2,7 +2,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.events import Event
-from src.models.registrations import Registration
+from src.models.registrations import (
+    Registration,
+    RegistrationStatus,
+)
 from src.models.users import User
 
 from .base import BaseRepository
@@ -64,7 +67,7 @@ class RegistrationRepository(BaseRepository[Registration]):
         count = await self.session.scalar(
             select(func.count(Registration.id)).where(
                 Registration.event_id == event_id,
-                Registration.status == "active",
+                Registration.status == RegistrationStatus.ACTIVE,
             )
         )
 
@@ -82,7 +85,7 @@ class RegistrationRepository(BaseRepository[Registration]):
             )
             .where(
                 Registration.event_id == event_id,
-                Registration.status == "active",
+                Registration.status == RegistrationStatus.ACTIVE,
             )
         )
 

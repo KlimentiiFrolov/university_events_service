@@ -1,11 +1,11 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    CheckConstraint,
     DateTime,
+    Enum,
     ForeignKey,
-    String,
     UniqueConstraint,
     func,
 )
@@ -17,6 +17,11 @@ from .mixins.id_pk_mixin import IdPrimaryKeyMixin
 if TYPE_CHECKING:
     from .events import Event
     from .users import User
+
+
+class RegistrationStatus(StrEnum):
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
 
 
 class Registration(Base, IdPrimaryKeyMixin):
@@ -32,10 +37,16 @@ class Registration(Base, IdPrimaryKeyMixin):
         nullable=False,
     )
 
-    status: Mapped[str] = mapped_column(
-        String(16),
+    status: Mapped[RegistrationStatus] = mapped_column(
+        Enum(
+            RegistrationStatus,
+            name="registration_status",
+            values_callable=lambda statuses: [
+                status.value for status in statuses
+            ],
+        ),
         nullable=False,
-        server_default="active",
+        server_default=RegistrationStatus.ACTIVE.value,
     )
 
     registered_at: Mapped[datetime] = mapped_column(
@@ -62,9 +73,5 @@ class Registration(Base, IdPrimaryKeyMixin):
             "user_id",
             "event_id",
             name="uq_registrations_user_event",
-        ),
-        CheckConstraint(
-            "status IN ('active', 'cancelled')",
-            name="ck_registrations_status",
         ),
     )

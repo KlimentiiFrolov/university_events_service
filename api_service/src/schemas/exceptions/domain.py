@@ -18,3 +18,19 @@ class NotFoundError(DomainError):
 
 class ConflictError(DomainError):
     """Операция конфликтует с текущим состоянием данных."""
+
+
+class RegistrationAlreadyExistsError(ConflictError):
+    """Пользователь уже регистрировался на мероприятие."""
+
+
+class RegistrationAlreadyCancelledError(ConflictError):
+    """Регистрация уже отменена."""
+
+
+class RegistrationAlreadyActiveError(ConflictError):
+    """Регистрация уже активна."""
+
+
+class EventCapacityExceededError(ConflictError):
+    """На мероприятии больше нет свободных мест."""

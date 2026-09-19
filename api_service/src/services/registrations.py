@@ -1,12 +1,18 @@
 from datetime import datetime, timezone
 
 from src.models.events import Event
-from src.models.registrations import Registration
+from src.models.registrations import (
+    Registration,
+    RegistrationStatus,
+)
 from src.models.users import User
 from src.repositories.registrations import RegistrationRepository
 from src.schemas.exceptions.domain import (
-    ConflictError,
+    EventCapacityExceededError,
     NotFoundError,
+    RegistrationAlreadyActiveError,
+    RegistrationAlreadyCancelledError,
+    RegistrationAlreadyExistsError,
 )
 
 
@@ -50,7 +56,7 @@ class RegistrationService:
         )
 
         if participants_count >= event.capacity:
-            raise ConflictError(
+            raise EventCapacityExceededError(
                 f"Event id={event.id} has no free places"
             )
 
@@ -70,7 +76,7 @@ class RegistrationService:
         )
 
         if existing is not None:
-            raise ConflictError(
+            raise RegistrationAlreadyExistsError(
                 "Registration already exists"
             )
 
@@ -79,7 +85,7 @@ class RegistrationService:
         registration = Registration(
             user_id=user_id,
             event_id=event_id,
-            status="active",
+            status=RegistrationStatus.ACTIVE,
         )
 
         return await self.repository.add(registration)
@@ -102,12 +108,12 @@ class RegistrationService:
                 f"user_id={user_id}, event_id={event_id}",
             )
 
-        if registration.status == "cancelled":
-            raise ConflictError(
+        if registration.status == RegistrationStatus.CANCELLED:
+            raise RegistrationAlreadyCancelledError(
                 "Registration is already cancelled"
             )
 
-        registration.status = "cancelled"
+        registration.status = RegistrationStatus.CANCELLED
         registration.cancelled_at = datetime.now(timezone.utc)
 
         return await self.repository.update(registration)
@@ -130,8 +136,8 @@ class RegistrationService:
                 f"user_id={user_id}, event_id={event_id}",
             )
 
-        if registration.status == "active":
-            raise ConflictError(
+        if registration.status == RegistrationStatus.ACTIVE:
+            raise RegistrationAlreadyActiveError(
                 "Registration is already active"
             )
 
@@ -139,7 +145,7 @@ class RegistrationService:
 
         await self._check_capacity(event)
 
-        registration.status = "active"
+        registration.status = RegistrationStatus.ACTIVE
         registration.registered_at = datetime.now(timezone.utc)
         registration.cancelled_at = None
 
