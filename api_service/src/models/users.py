@@ -1,9 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import CheckConstraint, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
 from .mixins.id_pk_mixin import IdPrimaryKeyMixin
 
+if TYPE_CHECKING:
+    from .events import Event
 
 class User(Base, IdPrimaryKeyMixin):
     __tablename__ = "users"
@@ -24,6 +28,8 @@ class User(Base, IdPrimaryKeyMixin):
         nullable=False,
         server_default="participant",
     )
+
+    events: Mapped[list["Event"]] = relationship(back_populates="events")
 
     __table_args__ = (
         CheckConstraint(

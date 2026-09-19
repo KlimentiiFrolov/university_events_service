@@ -1,4 +1,4 @@
-__all__ = ("Base", "Event", "EventTag", "Tag", "User)
+__all__ = ("Base", "Event", "EventTag", "Tag", "User")
 
 from .base import Base
 from .event_tags import EventTag
