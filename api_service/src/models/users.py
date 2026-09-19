@@ -29,7 +29,7 @@ class User(Base, IdPrimaryKeyMixin):
         server_default="participant",
     )
 
-    events: Mapped[list["Event"]] = relationship(back_populates="events")
+    created_events: Mapped[list["Event"]] = relationship(back_populates="created_by")
 
     __table_args__ = (
         CheckConstraint(

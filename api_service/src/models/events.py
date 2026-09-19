@@ -24,7 +24,7 @@ class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin):
 
     event_tags: Mapped[list["EventTag"]] = relationship(back_populates="event")
 
-    created_by: Mapped["User"] = relationship(back_populates="events")
+    created_by: Mapped["User"] = relationship(back_populates="created_events")
 
     __table_args__ = (
         CheckConstraint("capacity >= 0", name="ck_capacity_ge_0"),
