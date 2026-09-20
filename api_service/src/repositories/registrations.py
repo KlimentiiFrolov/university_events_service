@@ -1,7 +1,6 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.events import Event
 from src.models.registrations import (
     Registration,
     RegistrationStatus,
@@ -41,24 +40,6 @@ class RegistrationRepository(BaseRepository[Registration]):
         )
 
         return list(result.all())
-
-    async def get_user(
-        self,
-        user_id: int,
-    ) -> User | None:
-        return await self.session.get(
-            User,
-            user_id,
-        )
-
-    async def get_event(
-        self,
-        event_id: int,
-    ) -> Event | None:
-        return await self.session.get(
-            Event,
-            event_id,
-        )
 
     async def count_active_for_event(
         self,
