@@ -2,6 +2,7 @@ from typing import Callable
 
 from src.repositories.event_tags import EventTagRepository
 from src.repositories.events import EventRepository
+from src.repositories.registrations import RegistrationRepository
 from src.repositories.tags import TagRepository
 from src.repositories.users import UserRepository
 
@@ -19,6 +20,7 @@ class UnitOfWork:
         self.events = EventRepository(self.session)
         self.tags = TagRepository(self.session)
         self.event_tags = EventTagRepository(self.session)
+        self.registrations = RegistrationRepository(self.session)
 
         return self
 
