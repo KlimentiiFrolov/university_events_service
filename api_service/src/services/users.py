@@ -13,10 +13,11 @@ class UserService:
         self.uow = uow
 
     async def create_user(
-        self,
-        email: str,
-        full_name: str,
-        role: str = "participant",
+            self,
+            email: str,
+            first_name: str,
+            second_name: str,
+            role: str = "participant",
     ) -> User:
         existing = await self.uow.users.get_by_email(email)
 
@@ -27,7 +28,8 @@ class UserService:
 
         user = User(
             email=email,
-            full_name=full_name,
+            first_name=first_name,
+            second_name=second_name,
             role=role,
         )
 
@@ -56,16 +58,20 @@ class UserService:
         return await self.uow.users.get_all()
 
     async def update_user(
-        self,
-        user_id: int,
-        *,
-        full_name: str | None = None,
-        role: str | None = None,
+            self,
+            user_id: int,
+            *,
+            first_name: str | None = None,
+            second_name: str | None = None,
+            role: str | None = None,
     ) -> User:
         user = await self.get_user(user_id)
 
-        if full_name is not None:
-            user.full_name = full_name
+        if first_name is not None:
+            user.first_name = first_name
+
+        if second_name is not None:
+            user.second_name = second_name
 
         if role is not None:
             user.role = role
