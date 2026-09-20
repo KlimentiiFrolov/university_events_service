@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.create_table('tags',
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.CheckConstraint('LENGTH(name)>2', name='ck_name_length_gt_2'),
+    sa.CheckConstraint('LENGTH(name)>=2', name='ck_name_length_ge_2'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )

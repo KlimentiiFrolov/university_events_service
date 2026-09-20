@@ -17,5 +17,5 @@ class Tag(Base, IdPrimaryKeyMixin):
     events: Mapped[list["EventTag"]] = relationship(back_populates="tag")
 
     __table_args__ = (
-        CheckConstraint('LENGTH(name)>2', name="ck_name_length_gt_2"),
+        CheckConstraint('LENGTH(name)>=2', name="ck_name_length_ge_2"),
     )
