@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
-from api_service.src.core.uow import UnitOfWork
-
+from src.core.uow import UnitOfWork
 from src.models.events import Event
 from src.models.registrations import (
     Registration,
