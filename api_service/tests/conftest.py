@@ -19,6 +19,7 @@ from src.models.events import Event
 from src.models.tags import Tag
 from src.models.users import User
 from src.services.users import UserService
+from src.services.registrations import RegistrationService
 
 
 @pytest.fixture(scope="session")
@@ -79,6 +80,11 @@ async def uow(async_session: AsyncSession) -> AsyncGenerator[UnitOfWork, None]:
 @pytest.fixture()
 def user_service(uow: UnitOfWork) -> UserService:
     return UserService(uow=uow)
+
+
+@pytest.fixture()
+def registration_service(uow: UnitOfWork) -> RegistrationService:
+    return RegistrationService(uow=uow)
 
 
 @pytest.fixture()
