@@ -1,5 +1,4 @@
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.base import Base
@@ -28,26 +27,18 @@ class BaseRepository[ModelT: Base]:
         return list(result.all())
 
     async def add(self, entity: ModelT) -> ModelT:
-        try:
-            self.session.add(entity)
-            await self.session.commit()
-            await self.session.refresh(entity)
-        except IntegrityError:
-            await self.session.rollback()
-            raise
+        self.session.add(entity)
+        await self.session.flush()
+        await self.session.refresh(entity)
 
         return entity
 
     async def update(self, entity: ModelT) -> ModelT:
-        try:
-            await self.session.commit()
-            await self.session.refresh(entity)
-        except IntegrityError:
-            await self.session.rollback()
-            raise
+        await self.session.flush()
+        await self.session.refresh(entity)
 
         return entity
 
     async def delete(self, entity: ModelT) -> None:
         await self.session.delete(entity)
-        await self.session.commit()
+        await self.session.flush()

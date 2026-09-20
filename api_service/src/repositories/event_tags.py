@@ -1,5 +1,4 @@
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.event_tags import EventTag
@@ -43,12 +42,8 @@ class EventTagRepository(BaseRepository[EventTag]):
             for tag_id in tag_ids
         ]
 
-        try:
-            self.session.add_all(event_tags)
-            await self.session.commit()
-        except IntegrityError:
-            await self.session.rollback()
-            raise
+        self.session.add_all(event_tags)
+        await self.session.flush()
 
         return event_tags
 
@@ -64,4 +59,4 @@ class EventTagRepository(BaseRepository[EventTag]):
         await self.session.execute(
             delete(EventTag).where(EventTag.event_id == event_id)
         )
-        await self.session.commit()
+        await self.session.flush()
