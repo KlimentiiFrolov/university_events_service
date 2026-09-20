@@ -10,8 +10,8 @@ from .mixins.id_pk_mixin import IdPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from .event_tags import EventTag
-    from .users import User
     from .registrations import Registration
+    from .users import User
 
 
 class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin):
