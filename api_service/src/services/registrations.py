@@ -1,12 +1,13 @@
 from datetime import datetime, timezone
 
+from api_service.src.core.uow import UnitOfWork
+
 from src.models.events import Event
 from src.models.registrations import (
     Registration,
     RegistrationStatus,
 )
 from src.models.users import User
-from src.repositories.registrations import RegistrationRepository
 from src.schemas.exceptions.domain import (
     EventCapacityExceededError,
     NotFoundError,
@@ -17,17 +18,14 @@ from src.schemas.exceptions.domain import (
 
 
 class RegistrationService:
-    def __init__(
-        self,
-        repository: RegistrationRepository,
-    ):
-        self.repository = repository
+    def __init__(self, uow: UnitOfWork):
+        self.uow = uow
 
     async def _get_user(
         self,
         user_id: int,
     ) -> User:
-        user = await self.repository.get_user(user_id)
+        user = await self.uow.registrations.get_user(user_id)
 
         if user is None:
             raise NotFoundError("User", user_id)
@@ -38,7 +36,7 @@ class RegistrationService:
         self,
         event_id: int,
     ) -> Event:
-        event = await self.repository.get_event(event_id)
+        event = await self.uow.registrations.get_event(event_id)
 
         if event is None:
             raise NotFoundError("Event", event_id)
@@ -50,7 +48,7 @@ class RegistrationService:
         event: Event,
     ) -> None:
         participants_count = (
-            await self.repository.count_active_for_event(
+            await self.uow.registrations.count_active_for_event(
                 event.id
             )
         )
@@ -69,7 +67,7 @@ class RegistrationService:
         event = await self._get_event(event_id)
 
         existing = (
-            await self.repository.get_by_user_and_event(
+            await self.uow.registrations.get_by_user_and_event(
                 user_id,
                 event_id,
             )
@@ -88,7 +86,7 @@ class RegistrationService:
             status=RegistrationStatus.ACTIVE,
         )
 
-        return await self.repository.add(registration)
+        return await self.uow.registrations.add(registration)
 
     async def cancel(
         self,
@@ -96,7 +94,7 @@ class RegistrationService:
         event_id: int,
     ) -> Registration:
         registration = (
-            await self.repository.get_by_user_and_event(
+            await self.uow.registrations.get_by_user_and_event(
                 user_id,
                 event_id,
             )
@@ -116,7 +114,7 @@ class RegistrationService:
         registration.status = RegistrationStatus.CANCELLED
         registration.cancelled_at = datetime.now(timezone.utc)
 
-        return await self.repository.update(registration)
+        return await self.uow.registrations.update(registration)
 
     async def reregister(
         self,
@@ -124,7 +122,7 @@ class RegistrationService:
         event_id: int,
     ) -> Registration:
         registration = (
-            await self.repository.get_by_user_and_event(
+            await self.uow.registrations.get_by_user_and_event(
                 user_id,
                 event_id,
             )
@@ -149,7 +147,7 @@ class RegistrationService:
         registration.registered_at = datetime.now(timezone.utc)
         registration.cancelled_at = None
 
-        return await self.repository.update(registration)
+        return await self.uow.registrations.update(registration)
 
     async def get_my_registrations(
         self,
@@ -157,7 +155,7 @@ class RegistrationService:
     ) -> list[Registration]:
         await self._get_user(user_id)
 
-        return await self.repository.get_by_user_id(user_id)
+        return await self.uow.registrations.get_by_user_id(user_id)
 
     async def get_event_participants(
         self,
@@ -165,6 +163,6 @@ class RegistrationService:
     ) -> list[User]:
         await self._get_event(event_id)
 
-        return await self.repository.get_event_participants(
+        return await self.uow.registrations.get_event_participants(
             event_id
         )
