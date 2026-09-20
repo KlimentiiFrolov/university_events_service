@@ -91,11 +91,20 @@ def registration_service(uow: UnitOfWork) -> RegistrationService:
 def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
     async def _make_user(
         email: str | None = None,
-        full_name: str = "Test User",
+        first_name: str = "Test",
+        second_name: str = "User",
         role: str = "participant",
     ) -> User:
         email = email or f"user-{uuid.uuid4().hex}@example.com"
-        return await uow.users.add(User(email=email, full_name=full_name, role=role))
+
+        return await uow.users.add(
+            User(
+                email=email,
+                first_name=first_name,
+                second_name=second_name,
+                role=role,
+            )
+        )
 
     return _make_user
 
@@ -143,9 +152,24 @@ def make_event(
 @pytest.fixture()
 async def seed_users(async_session: AsyncSession) -> list[User]:
     users = [
-        User(email="participant1@example.com", full_name="Participant One", role="participant"),
-        User(email="participant2@example.com", full_name="Participant Two", role="participant"),
-        User(email="organizer1@example.com", full_name="Organizer One", role="organizer"),
+        User(
+            email="participant1@example.com",
+            first_name="Participant",
+            second_name="One",
+            role="participant",
+        ),
+        User(
+            email="participant2@example.com",
+            first_name="Participant",
+            second_name="Two",
+            role="participant",
+        ),
+        User(
+            email="organizer1@example.com",
+            first_name="Organizer",
+            second_name="One",
+            role="organizer",
+        ),
     ]
 
     async_session.add_all(users)

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .events import Event
     from .registrations import Registration
 
+
 class User(Base, IdPrimaryKeyMixin):
     __tablename__ = "users"
 
@@ -19,8 +20,13 @@ class User(Base, IdPrimaryKeyMixin):
         unique=True,
     )
 
-    full_name: Mapped[str] = mapped_column(
-        String(255),
+    first_name: Mapped[str] = mapped_column(
+        String(127),
+        nullable=False,
+    )
+
+    second_name: Mapped[str] = mapped_column(
+        String(127),
         nullable=False,
     )
 
@@ -30,7 +36,13 @@ class User(Base, IdPrimaryKeyMixin):
         server_default="participant",
     )
 
-    created_events: Mapped[list["Event"]] = relationship(back_populates="created_by")
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name} {self.second_name}".strip()
+
+    created_events: Mapped[list["Event"]] = relationship(
+        back_populates="created_by"
+    )
 
     registrations: Mapped[list["Registration"]] = relationship(
         back_populates="user",
