@@ -1,7 +1,6 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.events import Event
 from src.models.registrations import (
     Registration,
     RegistrationStatus,
