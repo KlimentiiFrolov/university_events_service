@@ -10,6 +10,7 @@ from .mixins.id_pk_mixin import IdPrimaryKeyMixin
 if TYPE_CHECKING:
     from .event_tags import EventTag
     from .users import User
+    from .registrations import Registration
 
 
 class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin):
@@ -25,6 +26,11 @@ class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin):
     event_tags: Mapped[list["EventTag"]] = relationship(back_populates="event")
 
     created_by: Mapped["User"] = relationship(back_populates="created_events")
+
+    registrations: Mapped[list["Registration"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint("capacity >= 0", name="ck_capacity_ge_0"),

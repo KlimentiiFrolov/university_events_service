@@ -8,6 +8,7 @@ from .mixins.id_pk_mixin import IdPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from .events import Event
+    from .registrations import Registration
 
 class User(Base, IdPrimaryKeyMixin):
     __tablename__ = "users"
@@ -30,6 +31,11 @@ class User(Base, IdPrimaryKeyMixin):
     )
 
     created_events: Mapped[list["Event"]] = relationship(back_populates="created_by")
+
+    registrations: Mapped[list["Registration"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint(
