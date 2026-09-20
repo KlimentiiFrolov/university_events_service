@@ -1,7 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 
+from src.core.uow import UnitOfWork
 from src.models.users import User
-from src.repositories.users import UserRepository
 from src.schemas.exceptions.domain import (
     ConflictError,
     NotFoundError,
@@ -9,8 +9,8 @@ from src.schemas.exceptions.domain import (
 
 
 class UserService:
-    def __init__(self, repository: UserRepository):
-        self.repository = repository
+    def __init__(self, uow: UnitOfWork):
+        self.uow = uow
 
     async def create_user(
         self,
@@ -18,7 +18,7 @@ class UserService:
         full_name: str,
         role: str = "participant",
     ) -> User:
-        existing = await self.repository.get_by_email(email)
+        existing = await self.uow.users.get_by_email(email)
 
         if existing is not None:
             raise ConflictError(
@@ -32,7 +32,7 @@ class UserService:
         )
 
         try:
-            return await self.repository.add(user)
+            return await self.uow.users.add(user)
         except IntegrityError as error:
             raise ConflictError(
                 f"User with email={email} already exists"
@@ -42,7 +42,7 @@ class UserService:
         self,
         user_id: int,
     ) -> User:
-        user = await self.repository.get_by_id(user_id)
+        user = await self.uow.users.get_by_id(user_id)
 
         if user is None:
             raise NotFoundError(
@@ -53,7 +53,7 @@ class UserService:
         return user
 
     async def get_users(self) -> list[User]:
-        return await self.repository.get_all()
+        return await self.uow.users.get_all()
 
     async def update_user(
         self,
@@ -70,7 +70,7 @@ class UserService:
         if role is not None:
             user.role = role
 
-        return await self.repository.update(user)
+        return await self.uow.users.update(user)
 
     async def delete_user(
         self,
@@ -78,4 +78,4 @@ class UserService:
     ) -> None:
         user = await self.get_user(user_id)
 
-        await self.repository.delete(user)
+        await self.uow.users.delete(user)

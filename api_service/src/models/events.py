@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text
@@ -19,7 +20,7 @@ class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin):
     title: Mapped[str] = mapped_column(String(150), nullable=False)
     text: Mapped[str] = mapped_column(Text(), nullable=True)
     location: Mapped[str] = mapped_column(String(200), nullable=False)
-    event_date: Mapped[str] = mapped_column(DateTime(timezone=True))
+    event_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     capacity: Mapped[int] = mapped_column(nullable=False)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
