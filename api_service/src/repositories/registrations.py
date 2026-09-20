@@ -42,24 +42,6 @@ class RegistrationRepository(BaseRepository[Registration]):
 
         return list(result.all())
 
-    async def get_user(
-        self,
-        user_id: int,
-    ) -> User | None:
-        return await self.session.get(
-            User,
-            user_id,
-        )
-
-    async def get_event(
-        self,
-        event_id: int,
-    ) -> Event | None:
-        return await self.session.get(
-            Event,
-            event_id,
-        )
-
     async def count_active_for_event(
         self,
         event_id: int,

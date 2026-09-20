@@ -24,7 +24,7 @@ class RegistrationService:
         self,
         user_id: int,
     ) -> User:
-        user = await self.uow.registrations.get_user(user_id)
+        user = await self.uow.users.get_by_id(user_id)
 
         if user is None:
             raise NotFoundError("User", user_id)
@@ -35,7 +35,7 @@ class RegistrationService:
         self,
         event_id: int,
     ) -> Event:
-        event = await self.uow.registrations.get_event(event_id)
+        event = await self.uow.events.get_by_id(event_id)
 
         if event is None:
             raise NotFoundError("Event", event_id)
@@ -152,7 +152,7 @@ class RegistrationService:
         self,
         user_id: int,
     ) -> list[Registration]:
-        await self._get_user(user_id)
+        await self._get_user(user_id) # TODO: можно будет убрать эту проверку, после того, как сделаем слой представлений и добавим зависимость для авторизации пользователя
 
         return await self.uow.registrations.get_by_user_id(user_id)
 
