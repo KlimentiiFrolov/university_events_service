@@ -20,6 +20,7 @@ from src.models.tags import Tag
 from src.models.users import User
 from src.services.users import UserService
 from src.services.registrations import RegistrationService
+from src.services.events import EventService
 
 
 @pytest.fixture(scope="session")
@@ -85,6 +86,11 @@ def user_service(uow: UnitOfWork) -> UserService:
 @pytest.fixture()
 def registration_service(uow: UnitOfWork) -> RegistrationService:
     return RegistrationService(uow=uow)
+
+
+@pytest.fixture()
+def event_service(uow: UnitOfWork) -> EventService:
+    return EventService(uow=uow)
 
 
 @pytest.fixture()

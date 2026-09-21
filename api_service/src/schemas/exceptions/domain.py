@@ -20,6 +20,10 @@ class ConflictError(DomainError):
     """Операция конфликтует с текущим состоянием данных."""
 
 
+class ForbiddenError(DomainError):
+    """У пользователя нет прав на выполнение операции."""
+
+
 class RegistrationAlreadyExistsError(ConflictError):
     """Пользователь уже регистрировался на мероприятие."""
 

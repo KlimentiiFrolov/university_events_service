@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
 from .mixins.created_at_mixin import CreatedAtMixin
+from .mixins.deleted_at_mixin import DeletedAtMixin
 from .mixins.id_pk_mixin import IdPrimaryKeyMixin
 
 if TYPE_CHECKING:
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     from .users import User
 
 
-class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin):
+class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin, DeletedAtMixin):
     __tablename__ = "events"
 
     title: Mapped[str] = mapped_column(String(150), nullable=False)
