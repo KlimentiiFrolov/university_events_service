@@ -1,6 +1,7 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.dates import get_current_datetime
 from src.models.registrations import (
     Registration,
     RegistrationStatus,
@@ -71,3 +72,17 @@ class RegistrationRepository(BaseRepository[Registration]):
         )
 
         return list(result.all())
+
+    async def cancel_all_active_for_event(self, event_id: int) -> None:
+        await self.session.execute(
+            update(Registration)
+            .where(
+                Registration.event_id == event_id,
+                Registration.status == RegistrationStatus.ACTIVE,
+            )
+            .values(
+                status=RegistrationStatus.CANCELLED,
+                cancelled_at=get_current_datetime(),
+            )
+        )
+        await self.session.flush()

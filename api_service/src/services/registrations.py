@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-
+from src.core.dates import get_current_datetime
 from src.core.uow import UnitOfWork
 from src.models.events import Event
 from src.models.registrations import (
@@ -34,8 +33,9 @@ class RegistrationService:
     async def _get_event(
         self,
         event_id: int,
+        for_update: bool = False,
     ) -> Event:
-        event = await self.uow.events.get_by_id(event_id)
+        event = await self.uow.events.get_by_id(event_id, for_update=for_update)
 
         if event is None:
             raise NotFoundError("Event", event_id)
@@ -63,7 +63,7 @@ class RegistrationService:
         event_id: int,
     ) -> Registration:
         await self._get_user(user_id)
-        event = await self._get_event(event_id)
+        event = await self._get_event(event_id, for_update=True)
 
         existing = (
             await self.uow.registrations.get_by_user_and_event(
@@ -111,7 +111,7 @@ class RegistrationService:
             )
 
         registration.status = RegistrationStatus.CANCELLED
-        registration.cancelled_at = datetime.now(timezone.utc)
+        registration.cancelled_at = get_current_datetime()
 
         return await self.uow.registrations.update(registration)
 
@@ -138,12 +138,12 @@ class RegistrationService:
                 "Registration is already active"
             )
 
-        event = await self._get_event(event_id)
+        event = await self._get_event(event_id, for_update=True)
 
         await self._check_capacity(event)
 
         registration.status = RegistrationStatus.ACTIVE
-        registration.registered_at = datetime.now(timezone.utc)
+        registration.registered_at = get_current_datetime()
         registration.cancelled_at = None
 
         return await self.uow.registrations.update(registration)

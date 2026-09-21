@@ -42,7 +42,7 @@ class EventRepository(BaseRepository[Event]):
         date_to: datetime | None = None,
         tag_ids: list[int] | None = None,
     ) -> list[Event]:
-        stmt = select(Event)
+        stmt = select(Event).where(Event.deleted_at.is_(None))
 
         if date_from is not None:
             stmt = stmt.where(Event.event_date >= date_from)
@@ -60,6 +60,9 @@ class EventRepository(BaseRepository[Event]):
 
     async def list_by_organizer(self, created_by_id: int) -> list[Event]:
         result = await self.session.scalars(
-            select(Event).where(Event.created_by_id == created_by_id)
+            select(Event).where(
+                Event.created_by_id == created_by_id,
+                Event.deleted_at.is_(None),
+            )
         )
         return list(result.all())
