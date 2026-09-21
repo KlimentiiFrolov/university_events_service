@@ -41,6 +41,8 @@ class EventRepository(BaseRepository[Event]):
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         tag_ids: list[int] | None = None,
+        limit: int = 20,
+        offset: int = 0,
     ) -> list[Event]:
         stmt = select(Event).where(Event.deleted_at.is_(None))
 
@@ -55,14 +57,28 @@ class EventRepository(BaseRepository[Event]):
                 .distinct()
             )
 
+        stmt = stmt.order_by(Event.event_date, Event.id).limit(limit).offset(offset)
+
         result = await self.session.scalars(stmt)
         return list(result.all())
 
-    async def list_by_organizer(self, created_by_id: int) -> list[Event]:
-        result = await self.session.scalars(
-            select(Event).where(
+    async def list_by_organizer(
+        self,
+        created_by_id: int,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[Event]:
+        stmt = (
+            select(Event)
+            .where(
                 Event.created_by_id == created_by_id,
                 Event.deleted_at.is_(None),
             )
+            .order_by(Event.event_date, Event.id)
+            .limit(limit)
+            .offset(offset)
         )
+
+        result = await self.session.scalars(stmt)
         return list(result.all())
