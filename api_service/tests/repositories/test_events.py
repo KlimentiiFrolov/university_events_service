@@ -85,7 +85,7 @@ async def test_list_filtered_by_tags_returns_only_tagged_events(
 async def test_list_by_organizer_returns_only_their_events(
     uow: UnitOfWork, make_user, make_event
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
     own_event = await make_event(title="Own", created_by_id=organizer.id)
     await make_event(title="Someone else's")
 

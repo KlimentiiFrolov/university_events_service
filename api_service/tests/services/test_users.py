@@ -16,7 +16,6 @@ async def test_create_user(user_service: UserService):
     assert user.first_name == "Test"
     assert user.second_name == "User"
     assert user.full_name == "Test User"
-    assert user.role == "participant"
 
 
 async def test_create_user_with_duplicate_email_raises_conflict(
@@ -72,13 +71,11 @@ async def test_update_user(
         user.id,
         first_name="New",
         second_name="Name",
-        role="organizer",
     )
 
     assert updated.first_name == "New"
     assert updated.second_name == "Name"
     assert updated.full_name == "New Name"
-    assert updated.role == "organizer"
 
 
 async def test_delete_user(

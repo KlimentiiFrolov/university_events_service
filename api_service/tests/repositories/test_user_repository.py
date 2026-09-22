@@ -124,7 +124,6 @@ async def test_duplicate_email_raises_integrity_error(
         email="same@example.com",
         first_name="Another",
         second_name="User",
-        role="participant",
     )
 
     with pytest.raises(IntegrityError):

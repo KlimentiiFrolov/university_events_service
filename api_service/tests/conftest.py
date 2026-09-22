@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import NullPool
+from sqlalchemy import NullPool, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -16,6 +16,7 @@ from src.core.uow import UnitOfWork
 from src.models import Base
 from src.models.event_tags import EventTag
 from src.models.events import Event
+from src.models.roles import Role, RoleName
 from src.models.tags import Tag
 from src.models.users import User
 from src.services.users import UserService
@@ -36,7 +37,6 @@ def create_db_url(postgres_container: PostgresContainer) -> str:
 
 @pytest.fixture(scope="function")
 async def engine(postgres_container: PostgresContainer) -> AsyncGenerator[AsyncEngine, None]:
-    """Создаёт движок и таблицы заново для каждого теста."""
     db_url = create_db_url(postgres_container)
     # NullPool, чтобы соединения не переиспользовались между тестами, запущенными в разных event loop
     engine = create_async_engine(db_url, poolclass=NullPool)
@@ -69,7 +69,13 @@ async def async_session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, Non
 
 
 @pytest.fixture()
-async def uow(async_session: AsyncSession) -> AsyncGenerator[UnitOfWork, None]:
+async def seed_roles(async_session: AsyncSession) -> None:
+    async_session.add_all([Role(name=role_name) for role_name in RoleName])
+    await async_session.flush()
+
+
+@pytest.fixture()
+async def uow(async_session: AsyncSession, seed_roles: None) -> AsyncGenerator[UnitOfWork, None]:
     """UnitOfWork поверх сессии теста: commit() внутри теста коммитит только
     в рамках внешней транзакции async_session, которая в итоге откатывается."""
     unit_of_work = UnitOfWork(session_factory=lambda: async_session)
@@ -99,16 +105,17 @@ def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
         email: str | None = None,
         first_name: str = "Test",
         second_name: str = "User",
-        role: str = "participant",
+        role: RoleName = RoleName.PARTICIPANT,
     ) -> User:
         email = email or f"user-{uuid.uuid4().hex}@example.com"
+        role_entity = await uow.roles.get_by_name(role)
 
         return await uow.users.add(
             User(
                 email=email,
                 first_name=first_name,
                 second_name=second_name,
-                role=role,
+                role=role_entity,
             )
         )
 
@@ -138,7 +145,7 @@ def make_event(
         created_by_id: int | None = None,
     ) -> Event:
         if created_by_id is None:
-            organizer = await make_user(role="organizer")
+            organizer = await make_user(role=RoleName.ORGANIZER)
             created_by_id = organizer.id
 
         return await uow.events.add(
@@ -157,24 +164,31 @@ def make_event(
 
 @pytest.fixture()
 async def seed_users(async_session: AsyncSession) -> list[User]:
+    participant_role = await async_session.scalar(
+        select(Role).where(Role.name == RoleName.PARTICIPANT)
+    )
+    organizer_role = await async_session.scalar(
+        select(Role).where(Role.name == RoleName.ORGANIZER)
+    )
+
     users = [
         User(
             email="participant1@example.com",
             first_name="Participant",
             second_name="One",
-            role="participant",
+            role=participant_role,
         ),
         User(
             email="participant2@example.com",
             first_name="Participant",
             second_name="Two",
-            role="participant",
+            role=participant_role,
         ),
         User(
             email="organizer1@example.com",
             first_name="Organizer",
             second_name="One",
-            role="organizer",
+            role=organizer_role,
         ),
     ]
 
@@ -200,7 +214,9 @@ async def seed_tags(async_session: AsyncSession) -> list[Tag]:
 
 @pytest.fixture()
 async def seed_events(async_session: AsyncSession, seed_users: list[User]) -> list[Event]:
-    organizer = next(user for user in seed_users if user.role == "organizer")
+    organizer = next(
+        user for user in seed_users if user.role.name == RoleName.ORGANIZER
+    )
 
     events = [
         Event(
