@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from src.core.uow import UnitOfWork
+from src.models.roles import RoleName
 from src.models.tags import Tag
 from src.schemas.events import CreateEventSchema, UpdateEventSchema
 from src.schemas.exceptions.domain import (
@@ -13,7 +14,6 @@ from src.schemas.exceptions.domain import (
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
 from src.services.users import UserService
-
 
 # ЛОГИ
 
@@ -65,28 +65,28 @@ async def main() -> None:
             email=f"organizer-{suffix}@demo.local",
             first_name="Егор",
             second_name="Организатор",
-            role="organizer",
+            role=RoleName.ORGANIZER,
         )
 
         participant = await user_service.create_user(
             email=participant_email,
             first_name="Иван",
             second_name="Петров",
-            role="participant",
+            role=RoleName.PARTICIPANT,
         )
 
         second_participant = await user_service.create_user(
             email=f"anna-{suffix}@demo.local",
             first_name="Анна",
             second_name="Сидорова",
-            role="participant",
+            role=RoleName.PARTICIPANT,
         )
 
         third_participant = await user_service.create_user(
             email=f"pavel-{suffix}@demo.local",
             first_name="Павел",
             second_name="Смирнов",
-            role="participant",
+            role=RoleName.PARTICIPANT,
         )
 
         participant_id = participant.id
@@ -95,7 +95,7 @@ async def main() -> None:
             f"Создан организатор: "
             f"id={organizer.id}, "
             f"name={organizer.full_name}, "
-            f"role={organizer.role}"
+            f"role={organizer.role.name}"
         )
 
         success(
@@ -786,7 +786,7 @@ async def main() -> None:
                     email=rollback_email,
                     first_name="Временный",
                     second_name="Пользователь",
-                    role="participant",
+                    role=RoleName.PARTICIPANT,
                 )
             )
 
