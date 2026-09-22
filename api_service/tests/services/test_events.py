@@ -17,7 +17,7 @@ async def test_create_event_persists_event(
     event_service: EventService,
     make_user,
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
 
     event = await event_service.create_event(
         organizer.id,
@@ -38,7 +38,7 @@ async def test_create_event_without_tags_succeeds(
     event_service: EventService,
     make_user,
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
 
     event = await event_service.create_event(
         organizer.id,
@@ -60,7 +60,7 @@ async def test_create_event_with_tags_attaches_them(
     make_user,
     make_tag,
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
     tag = await make_tag(name="IT")
 
     event = await event_service.create_event(
@@ -99,7 +99,7 @@ async def test_create_event_missing_tag_raises_not_found(
     event_service: EventService,
     make_user,
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
 
     with pytest.raises(NotFoundError):
         await event_service.create_event(
@@ -195,7 +195,7 @@ async def test_list_organizer_events_returns_only_own_events(
     make_user,
     make_event,
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
     own_event = await make_event(title="Own", created_by_id=organizer.id)
     await make_event(title="Someone else's")
 
@@ -226,7 +226,7 @@ async def test_update_event_raises_forbidden_for_non_owner(
     make_user,
 ):
     event = await make_event()
-    other_organizer = await make_user(role="organizer")
+    other_organizer = await make_user()
 
     with pytest.raises(ForbiddenError):
         await event_service.update_event(
@@ -240,7 +240,7 @@ async def test_update_event_raises_not_found_for_missing_event(
     event_service: EventService,
     make_user,
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
 
     with pytest.raises(NotFoundError):
         await event_service.update_event(
@@ -296,7 +296,7 @@ async def test_set_event_tags_raises_forbidden_for_non_owner(
     make_tag,
 ):
     event = await make_event()
-    other_organizer = await make_user(role="organizer")
+    other_organizer = await make_user()
     tag = await make_tag()
 
     with pytest.raises(ForbiddenError):
@@ -358,7 +358,7 @@ async def test_delete_event_raises_forbidden_for_non_owner(
     make_user,
 ):
     event = await make_event()
-    other_organizer = await make_user(role="organizer")
+    other_organizer = await make_user()
 
     with pytest.raises(ForbiddenError):
         await event_service.delete_event(event.id, other_organizer.id)
@@ -368,7 +368,7 @@ async def test_delete_event_raises_not_found_for_missing_event(
     event_service: EventService,
     make_user,
 ):
-    organizer = await make_user(role="organizer")
+    organizer = await make_user()
 
     with pytest.raises(NotFoundError):
         await event_service.delete_event(999_999, organizer.id)

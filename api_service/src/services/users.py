@@ -1,6 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 
 from src.core.uow import UnitOfWork
+from src.models.roles import Role, RoleName
 from src.models.users import User
 from src.schemas.exceptions.domain import (
     ConflictError,
@@ -12,12 +13,20 @@ class UserService:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
 
+    async def _get_role_by_name(self, name: RoleName) -> Role:
+        role = await self.uow.roles.get_by_name(name)
+
+        if role is None:
+            raise NotFoundError("Role", name.value)
+
+        return role
+
     async def create_user(
-            self,
-            email: str,
-            first_name: str,
-            second_name: str,
-            role: str = "participant",
+        self,
+        email: str,
+        first_name: str,
+        second_name: str,
+        role: RoleName = RoleName.PARTICIPANT,
     ) -> User:
         existing = await self.uow.users.get_by_email(email)
 
@@ -26,11 +35,13 @@ class UserService:
                 f"User with email={email} already exists"
             )
 
+        role_entity = await self._get_role_by_name(role)
+
         user = User(
             email=email,
             first_name=first_name,
             second_name=second_name,
-            role=role,
+            role=role_entity,
         )
 
         try:
@@ -58,12 +69,12 @@ class UserService:
         return await self.uow.users.get_all()
 
     async def update_user(
-            self,
-            user_id: int,
-            *,
-            first_name: str | None = None,
-            second_name: str | None = None,
-            role: str | None = None,
+        self,
+        user_id: int,
+        *,
+        first_name: str | None = None,
+        second_name: str | None = None,
+        role: RoleName | None = None,
     ) -> User:
         user = await self.get_user(user_id)
 
@@ -74,7 +85,7 @@ class UserService:
             user.second_name = second_name
 
         if role is not None:
-            user.role = role
+            user.role = await self._get_role_by_name(role)
 
         return await self.uow.users.update(user)
 
