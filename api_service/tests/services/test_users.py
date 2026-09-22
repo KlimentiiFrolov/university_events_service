@@ -1,5 +1,6 @@
 import pytest
 
+from src.models.roles import RoleName
 from src.schemas.exceptions.domain import ConflictError, NotFoundError
 from src.services.users import UserService
 
@@ -16,6 +17,7 @@ async def test_create_user(user_service: UserService):
     assert user.first_name == "Test"
     assert user.second_name == "User"
     assert user.full_name == "Test User"
+    assert user.role.name == RoleName.PARTICIPANT
 
 
 async def test_create_user_with_duplicate_email_raises_conflict(
