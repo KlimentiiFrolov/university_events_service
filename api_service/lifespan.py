@@ -18,7 +18,7 @@ class Lifespan:
         """Закрыть соединения при завершении приложения"""
         results = await asyncio.gather(
             self._engine_dispose(),
-            return_exceptions=True, # ошибка закрытия одного ресурса не должна мешать закрыть остальные
+            return_exceptions=True,
         )
 
         for result in results:
