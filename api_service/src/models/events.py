@@ -1,0 +1,41 @@
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .base import Base
+from .mixins.created_at_mixin import CreatedAtMixin
+from .mixins.deleted_at_mixin import DeletedAtMixin
+from .mixins.id_pk_mixin import IdPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from .event_tags import EventTag
+    from .registrations import Registration
+    from .users import User
+
+
+class Event(Base, IdPrimaryKeyMixin, CreatedAtMixin, DeletedAtMixin):
+    __tablename__ = "events"
+
+    title: Mapped[str] = mapped_column(String(150), nullable=False)
+    text: Mapped[str] = mapped_column(Text(), nullable=True)
+    location: Mapped[str] = mapped_column(String(200), nullable=False)
+    event_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    capacity: Mapped[int] = mapped_column(nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    event_tags: Mapped[list["EventTag"]] = relationship(back_populates="event")
+
+    created_by: Mapped["User"] = relationship(back_populates="created_events")
+
+    registrations: Mapped[list["Registration"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint("capacity >= 0", name="ck_capacity_ge_0"),
+    ) 
+
+    

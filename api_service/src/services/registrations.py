@@ -1,0 +1,167 @@
+from src.core.dates import get_current_datetime
+from src.core.uow import UnitOfWork
+from src.models.events import Event
+from src.models.registrations import (
+    Registration,
+    RegistrationStatus,
+)
+from src.models.users import User
+from src.schemas.exceptions.domain import (
+    EventCapacityExceededError,
+    NotFoundError,
+    RegistrationAlreadyActiveError,
+    RegistrationAlreadyCancelledError,
+    RegistrationAlreadyExistsError,
+)
+
+
+class RegistrationService:
+    def __init__(self, uow: UnitOfWork):
+        self.uow = uow
+
+    async def _get_user(
+        self,
+        user_id: int,
+    ) -> User:
+        user = await self.uow.users.get_by_id(user_id)
+
+        if user is None:
+            raise NotFoundError("User", user_id)
+
+        return user
+
+    async def _get_event(
+        self,
+        event_id: int,
+        for_update: bool = False,
+    ) -> Event:
+        event = await self.uow.events.get_by_id(event_id, for_update=for_update)
+
+        if event is None:
+            raise NotFoundError("Event", event_id)
+
+        return event
+
+    async def _check_capacity(
+        self,
+        event: Event,
+    ) -> None:
+        participants_count = (
+            await self.uow.registrations.count_active_for_event(
+                event.id
+            )
+        )
+
+        if participants_count >= event.capacity:
+            raise EventCapacityExceededError(
+                f"Event id={event.id} has no free places"
+            )
+
+    async def register(
+        self,
+        user_id: int,
+        event_id: int,
+    ) -> Registration:
+        await self._get_user(user_id)
+        event = await self._get_event(event_id, for_update=True)
+
+        existing = (
+            await self.uow.registrations.get_by_user_and_event(
+                user_id,
+                event_id,
+            )
+        )
+
+        if existing is not None:
+            raise RegistrationAlreadyExistsError(
+                "Registration already exists"
+            )
+
+        await self._check_capacity(event)
+
+        registration = Registration(
+            user_id=user_id,
+            event_id=event_id,
+            status=RegistrationStatus.ACTIVE,
+        )
+
+        return await self.uow.registrations.add(registration)
+
+    async def cancel(
+        self,
+        user_id: int,
+        event_id: int,
+    ) -> Registration:
+        registration = (
+            await self.uow.registrations.get_by_user_and_event(
+                user_id,
+                event_id,
+            )
+        )
+
+        if registration is None:
+            raise NotFoundError(
+                "Registration",
+                f"user_id={user_id}, event_id={event_id}",
+            )
+
+        if registration.status == RegistrationStatus.CANCELLED:
+            raise RegistrationAlreadyCancelledError(
+                "Registration is already cancelled"
+            )
+
+        registration.status = RegistrationStatus.CANCELLED
+        registration.cancelled_at = get_current_datetime()
+
+        return await self.uow.registrations.update(registration)
+
+    async def reregister(
+        self,
+        user_id: int,
+        event_id: int,
+    ) -> Registration:
+        registration = (
+            await self.uow.registrations.get_by_user_and_event(
+                user_id,
+                event_id,
+            )
+        )
+
+        if registration is None:
+            raise NotFoundError(
+                "Registration",
+                f"user_id={user_id}, event_id={event_id}",
+            )
+
+        if registration.status == RegistrationStatus.ACTIVE:
+            raise RegistrationAlreadyActiveError(
+                "Registration is already active"
+            )
+
+        event = await self._get_event(event_id, for_update=True)
+
+        await self._check_capacity(event)
+
+        registration.status = RegistrationStatus.ACTIVE
+        registration.registered_at = get_current_datetime()
+        registration.cancelled_at = None
+
+        return await self.uow.registrations.update(registration)
+
+    async def get_my_registrations(
+        self,
+        user_id: int,
+    ) -> list[Registration]:
+        await self._get_user(user_id) # TODO: можно будет убрать эту проверку, после того, как сделаем слой представлений и добавим зависимость для авторизации пользователя
+
+        return await self.uow.registrations.get_by_user_id(user_id)
+
+    async def get_event_participants(
+        self,
+        event_id: int,
+    ) -> list[User]:
+        await self._get_event(event_id)
+
+        return await self.uow.registrations.get_event_participants(
+            event_id
+        )

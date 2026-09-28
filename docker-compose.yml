@@ -16,12 +16,10 @@ services:
   # -------------------------------------------------------------- infra ---
   db:
     image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: events
-      POSTGRES_USER: events
-      POSTGRES_PASSWORD: change_me
+    env_file:
+      - .env
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     networks: [backend]
@@ -48,7 +46,6 @@ services:
   # ----------------------------------------------------------- services ---
   api_service:
     build: ./api_service
-    env_file: ./api_service/.env.template
     ports:
       - "8000:8000"
     depends_on:
@@ -58,7 +55,7 @@ services:
 
   recommendation_service:
     build: ./recommendation_service
-    env_file: ./recommendation_service/.env.template
+    env_file: ./recommendation_service/.env
     ports:
       - "50051:50051"
     depends_on:
@@ -67,7 +64,7 @@ services:
 
   notification_service:
     build: ./notification_service
-    env_file: ./notification_service/.env.template
+    env_file: ./notification_service/.env
     ports:
       - "8001:8001"
     depends_on:
@@ -76,7 +73,7 @@ services:
 
   notification_client:
     build: ./notification_client
-    env_file: ./notification_client/.env.template
+    env_file: ./notification_client/.env
     depends_on:
       notification_service: { condition: service_started }
     networks: [backend]
