@@ -19,5 +19,4 @@ RUN uv sync --no-install-project
 COPY . /app
 RUN uv sync
 
-EXPOSE 8000
-CMD ["uv", "run", "python", "-m", "src.main"]
+CMD ["uv", "run", "python", "main.py"]

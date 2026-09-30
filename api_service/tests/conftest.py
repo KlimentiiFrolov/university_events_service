@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from testcontainers.postgres import PostgresContainer
 
+from src.core.logger import log
 from src.core.uow import UnitOfWork
 from src.models import Base
 from src.models.event_tags import EventTag
@@ -19,9 +20,14 @@ from src.models.events import Event
 from src.models.roles import Role, RoleName
 from src.models.tags import Tag
 from src.models.users import User
-from src.services.users import UserService
-from src.services.registrations import RegistrationService
 from src.services.events import EventService
+from src.services.registrations import RegistrationService
+from src.services.users import UserService
+
+# В тестах логи приложения отдаются в root-логгер, чтобы их перехватывал pytest
+# (log_cli / caplog), а свой StreamHandler убирается, чтобы не дублировать вывод в stderr.
+log.handlers.clear()
+log.propagate = True
 
 
 @pytest.fixture(scope="session")
