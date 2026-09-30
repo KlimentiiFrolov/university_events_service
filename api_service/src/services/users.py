@@ -8,6 +8,7 @@ from src.schemas.exceptions.domain import (
     ConflictError,
     NotFoundError,
 )
+from src.schemas.users import CreateUserSchema
 
 
 class UserService:
@@ -26,39 +27,53 @@ class UserService:
 
     async def create_user(
             self,
-            email: str,
-            first_name: str,
-            second_name: str,
-            password_hash: str,
-            role: RoleName = RoleName.PARTICIPANT,
+            data: CreateUserSchema,
     ) -> User:
-        existing = await self.uow.users.get_by_email(email)
+        existing = await self.uow.users.get_by_email(
+            data.email
+        )
 
         if existing is not None:
-            log.warning("User with this email already exists (id=%d)", existing.id)
+            log.warning(
+                "User with this email already exists "
+                "(id=%d)",
+                existing.id,
+            )
             raise ConflictError(
-                f"User with email={email} already exists"
+                f"User with email={data.email} "
+                "already exists"
             )
 
-        role_entity = await self._get_role_by_name(role)
+        role_entity = await self._get_role_by_name(
+            data.role
+        )
 
         user = User(
-            email=email,
-            first_name=first_name,
-            second_name=second_name,
-            password_hash=password_hash,
+            email=data.email,
+            first_name=data.first_name,
+            second_name=data.second_name,
+            password_hash=data.password_hash,
             role=role_entity,
         )
 
         try:
             user = await self.uow.users.add(user)
         except IntegrityError as error:
-            log.warning("User with this email already exists (concurrent insert)")
+            log.warning(
+                "User with this email already "
+                "exists (concurrent insert)"
+            )
             raise ConflictError(
-                f"User with email={email} already exists"
+                f"User with email={data.email} "
+                "already exists"
             ) from error
 
-        log.info("User id=%d created with role=%s", user.id, role.value)
+        log.info(
+            "User id=%d created with role=%s",
+            user.id,
+            data.role.value,
+        )
+
         return user
 
     async def get_user(
