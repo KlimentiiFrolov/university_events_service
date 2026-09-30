@@ -2,7 +2,11 @@ from typing import Sequence
 
 from fastapi import APIRouter
 
-router_list: Sequence[APIRouter] = tuple()
+from .auth import router as auth_router
+
+router_list: Sequence[APIRouter] = (
+    auth_router,
+)
 
 v1_router = APIRouter(prefix="/v1")
 

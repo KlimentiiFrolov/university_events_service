@@ -25,11 +25,12 @@ class UserService:
         return role
 
     async def create_user(
-        self,
-        email: str,
-        first_name: str,
-        second_name: str,
-        role: RoleName = RoleName.PARTICIPANT,
+            self,
+            email: str,
+            first_name: str,
+            second_name: str,
+            password_hash: str,
+            role: RoleName = RoleName.PARTICIPANT,
     ) -> User:
         existing = await self.uow.users.get_by_email(email)
 
@@ -45,6 +46,7 @@ class UserService:
             email=email,
             first_name=first_name,
             second_name=second_name,
+            password_hash=password_hash,
             role=role_entity,
         )
 

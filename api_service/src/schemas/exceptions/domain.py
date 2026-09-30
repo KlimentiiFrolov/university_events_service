@@ -24,6 +24,10 @@ class ForbiddenError(DomainError):
     """У пользователя нет прав на выполнение операции."""
 
 
+class InvalidCredentialsError(DomainError):
+    """Неверный email или пароль."""
+
+
 class RegistrationAlreadyExistsError(ConflictError):
     """Пользователь уже регистрировался на мероприятие."""
 

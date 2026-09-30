@@ -14,6 +14,7 @@ from src.schemas.exceptions.domain import (
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
 from src.services.users import UserService
+from src.core.passwords import hash_password
 
 # ЛОГИ
 
@@ -34,6 +35,10 @@ def success(message: str) -> None:
 
 async def main() -> None:
     suffix = uuid4().hex[:8]
+
+    demo_password_hash = hash_password(
+        "DemoPassword123!"
+    )
 
     print()
     print("=" * 72)
@@ -66,6 +71,7 @@ async def main() -> None:
             first_name="Егор",
             second_name="Организатор",
             role=RoleName.ORGANIZER,
+            password_hash=demo_password_hash,
         )
 
         participant = await user_service.create_user(
@@ -73,6 +79,7 @@ async def main() -> None:
             first_name="Иван",
             second_name="Петров",
             role=RoleName.PARTICIPANT,
+            password_hash=demo_password_hash,
         )
 
         second_participant = await user_service.create_user(
@@ -80,6 +87,7 @@ async def main() -> None:
             first_name="Анна",
             second_name="Сидорова",
             role=RoleName.PARTICIPANT,
+            password_hash=demo_password_hash,
         )
 
         third_participant = await user_service.create_user(
@@ -87,6 +95,7 @@ async def main() -> None:
             first_name="Павел",
             second_name="Смирнов",
             role=RoleName.PARTICIPANT,
+            password_hash=demo_password_hash,
         )
 
         participant_id = participant.id
@@ -787,6 +796,7 @@ async def main() -> None:
                     first_name="Временный",
                     second_name="Пользователь",
                     role=RoleName.PARTICIPANT,
+                    password_hash=demo_password_hash,
                 )
             )
 

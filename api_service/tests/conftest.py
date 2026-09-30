@@ -23,11 +23,15 @@ from src.models.users import User
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
 from src.services.users import UserService
+from src.core.passwords import hash_password
 
 # В тестах логи приложения отдаются в root-логгер, чтобы их перехватывал pytest
 # (log_cli / caplog), а свой StreamHandler убирается, чтобы не дублировать вывод в stderr.
 log.handlers.clear()
 log.propagate = True
+
+TEST_PASSWORD = "TestPassword123!"
+TEST_PASSWORD_HASH = hash_password(TEST_PASSWORD)
 
 
 @pytest.fixture(scope="session")
@@ -112,6 +116,7 @@ def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
         first_name: str = "Test",
         second_name: str = "User",
         role: RoleName = RoleName.PARTICIPANT,
+        password_hash: str = TEST_PASSWORD_HASH,
     ) -> User:
         email = email or f"user-{uuid.uuid4().hex}@example.com"
         role_entity = await uow.roles.get_by_name(role)
@@ -122,6 +127,7 @@ def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
                 first_name=first_name,
                 second_name=second_name,
                 role=role_entity,
+                password_hash=password_hash,
             )
         )
 
@@ -183,18 +189,21 @@ async def seed_users(async_session: AsyncSession) -> list[User]:
             first_name="Participant",
             second_name="One",
             role=participant_role,
+            password_hash=TEST_PASSWORD_HASH,
         ),
         User(
             email="participant2@example.com",
             first_name="Participant",
             second_name="Two",
             role=participant_role,
+            password_hash=TEST_PASSWORD_HASH,
         ),
         User(
             email="organizer1@example.com",
             first_name="Organizer",
             second_name="One",
             role=organizer_role,
+            password_hash=TEST_PASSWORD_HASH,
         ),
     ]
 
