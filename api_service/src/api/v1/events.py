@@ -35,7 +35,7 @@ def _to_event_response(event: Event) -> EventResponse:
 @router.get("", response_model=EventListResponse)
 async def list_events(
     service: EventServiceDep,
-    filters: EventFilterParams,
+    filters: Annotated[EventFilterParams, Query()],
 ) -> EventListResponse:
     events = await service.list_events(**filters.model_dump())
 

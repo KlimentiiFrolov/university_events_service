@@ -3,9 +3,11 @@ from typing import Sequence
 from fastapi import APIRouter
 
 from .auth import router as auth_router
+from .events import router as events_router
 
 router_list: Sequence[APIRouter] = (
     auth_router,
+    events_router,
 )
 
 v1_router = APIRouter(prefix="/v1")
