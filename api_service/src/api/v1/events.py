@@ -9,8 +9,9 @@ from src.schemas.events import (
     EventFilterParams,
     EventListResponse,
     EventResponse,
+    UpdateEventSchema,
 )
-from src.schemas.exceptions.domain import NotFoundError
+from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
 from src.schemas.tags import TagResponse
 
 router = APIRouter(
@@ -78,6 +79,34 @@ async def create_event(
     except NotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return _to_event_response(event)
+
+
+@router.patch("/{event_id}", response_model=EventResponse)
+async def update_event(
+    event_id: int,
+    data: UpdateEventSchema,
+    service: EventServiceDep,
+    user_id: CurrentUserIdDep,
+) -> EventResponse:
+    try:
+        event = await service.update_event(event_id, user_id, data)
+    except NotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ForbiddenError as error:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(error),
+        ) from error
+    except ConflictError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(error),
         ) from error
 
