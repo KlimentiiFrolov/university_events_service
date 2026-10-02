@@ -245,6 +245,45 @@ async def test_update_event_updates_fields(
     assert updated.title == data.title
 
 
+async def test_update_event_keeps_fields_that_were_not_passed(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    before = {
+        "title": event.title,
+        "text": event.text,
+        "location": event.location,
+        "event_date": event.event_date,
+    }
+    new_capacity = event.capacity + 1
+
+    updated = await event_service.update_event(
+        event.id,
+        event.created_by_id,
+        UpdateEventSchema(capacity=new_capacity),
+    )
+
+    assert updated.capacity == new_capacity
+    assert {field: getattr(updated, field) for field in before} == before
+
+
+async def test_update_event_clears_text_with_explicit_null(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    assert event.text is not None
+
+    updated = await event_service.update_event(
+        event.id,
+        event.created_by_id,
+        UpdateEventSchema(text=None),
+    )
+
+    assert updated.text is None
+
+
 async def test_update_event_returns_event_with_loaded_tags(
     event_service: EventService,
     make_event,
