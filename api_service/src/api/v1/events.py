@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from dependencies import CurrentUserIdDep, EventServiceDep
+from dependencies import EventServiceDep, OrganizerDep
 from src.models.events import Event
 from src.schemas.events import (
     CreateEventSchema,
@@ -43,10 +43,10 @@ def _to_event_response(event: Event) -> EventResponse:
 async def list_organizer_events(
     service: EventServiceDep,
     filters: Annotated[PaginationParams, Query()],
-    organizer_id: CurrentUserIdDep
+    organizer: OrganizerDep,
 ) -> EventListResponse:
     events = await service.list_organizer_events(
-        organizer_id, 
+        organizer.id,
         **filters.model_dump(exclude_none=True)
     )
 
@@ -92,10 +92,10 @@ async def get_event(
 async def create_event(
     data: CreateEventSchema,
     service: EventServiceDep,
-    user_id: CurrentUserIdDep,
+    organizer: OrganizerDep,
 ) -> EventResponse:
     try:
-        event = await service.create_event(user_id, data)
+        event = await service.create_event(organizer.id, data)
     except NotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -110,10 +110,10 @@ async def update_event(
     event_id: int,
     data: UpdateEventSchema,
     service: EventServiceDep,
-    user_id: CurrentUserIdDep,
+    organizer: OrganizerDep,
 ) -> EventResponse:
     try:
-        event = await service.update_event(event_id, user_id, data)
+        event = await service.update_event(event_id, organizer.id, data)
     except NotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -138,10 +138,10 @@ async def set_event_tags(
     event_id: int,
     data: SetEventTagsSchema,
     service: EventServiceDep,
-    user_id: CurrentUserIdDep,
+    organizer: OrganizerDep,
 ) -> EventResponse:
     try:
-        event = await service.set_event_tags(event_id, user_id, data.tag_ids)
+        event = await service.set_event_tags(event_id, organizer.id, data.tag_ids)
     except NotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -160,10 +160,10 @@ async def set_event_tags(
 async def delete_event(
     event_id: int,
     service: EventServiceDep,
-    user_id: CurrentUserIdDep,
+    organizer: OrganizerDep,
 ) -> None:
     try:
-        await service.delete_event(event_id, user_id)
+        await service.delete_event(event_id, organizer.id)
     except NotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
