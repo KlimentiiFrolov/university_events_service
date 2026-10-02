@@ -43,6 +43,8 @@ def test_app() -> FastAPI:
 @pytest.fixture
 async def api_client(async_session, test_app):
     async def _override_uow():
+        await async_session.commit()
+
         async with UnitOfWork(session_factory=lambda: async_session) as uow:
             yield uow
 
