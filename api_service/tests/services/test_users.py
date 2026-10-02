@@ -3,14 +3,19 @@ import pytest
 from src.models.roles import RoleName
 from src.schemas.exceptions.domain import ConflictError, NotFoundError
 from src.services.users import UserService
+from src.core.passwords import hash_password
+from src.schemas.users import CreateUserSchema
 
+PASSWORD_HASH = hash_password("TestPassword123!")
 
 async def test_create_user(user_service: UserService):
     user = await user_service.create_user(
+        CreateUserSchema(
         email="user@example.com",
         first_name="Test",
         second_name="User",
-    )
+        password_hash=PASSWORD_HASH,
+    ))
 
     assert user.id is not None
     assert user.email == "user@example.com"
@@ -18,33 +23,40 @@ async def test_create_user(user_service: UserService):
     assert user.second_name == "User"
     assert user.full_name == "Test User"
     assert user.role.name == RoleName.PARTICIPANT
+    assert user.password_hash == PASSWORD_HASH
 
 
 async def test_create_user_with_duplicate_email_raises_conflict(
     user_service: UserService,
 ):
     await user_service.create_user(
+        CreateUserSchema(
         email="user@example.com",
         first_name="First",
         second_name="User",
-    )
+        password_hash=PASSWORD_HASH,
+    ))
 
     with pytest.raises(ConflictError):
         await user_service.create_user(
+            CreateUserSchema(
             email="user@example.com",
             first_name="Second",
             second_name="User",
-        )
+            password_hash=PASSWORD_HASH,
+        ))
 
 
 async def test_get_user_returns_existing_user(
     user_service: UserService,
 ):
     created = await user_service.create_user(
+        CreateUserSchema(
         email="user@example.com",
         first_name="Test",
         second_name="User",
-    )
+        password_hash=PASSWORD_HASH,
+    ))
 
     fetched = await user_service.get_user(created.id)
 
@@ -64,10 +76,12 @@ async def test_update_user(
     user_service: UserService,
 ):
     user = await user_service.create_user(
+        CreateUserSchema(
         email="user@example.com",
         first_name="Old",
         second_name="Name",
-    )
+        password_hash=PASSWORD_HASH,
+    ))
 
     updated = await user_service.update_user(
         user.id,
@@ -84,10 +98,12 @@ async def test_delete_user(
     user_service: UserService,
 ):
     user = await user_service.create_user(
+        CreateUserSchema(
         email="user@example.com",
         first_name="Test",
         second_name="User",
-    )
+        password_hash=PASSWORD_HASH,
+    ))
 
     await user_service.delete_user(user.id)
 

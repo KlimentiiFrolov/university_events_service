@@ -6,8 +6,13 @@ from src.core.uow import UnitOfWork, get_uow
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
 from src.services.users import UserService
+from src.services.auth import AuthService
 
 UoWDep = Annotated[UnitOfWork, Depends(get_uow)]
+
+
+def get_auth_service(uow: UoWDep) -> AuthService:
+    return AuthService(uow=uow)
 
 
 def get_event_service(uow: UoWDep) -> EventService:
@@ -25,3 +30,4 @@ def get_user_service(uow: UoWDep) -> UserService:
 EventServiceDep = Annotated[EventService, Depends(get_event_service)]
 RegistrationServiceDep = Annotated[RegistrationService, Depends(get_registration_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
+AuthServiceDep = Annotated[AuthService, Depends(get_auth_service),]
