@@ -28,6 +28,10 @@ class InvalidCredentialsError(DomainError):
     """Неверный email или пароль."""
 
 
+class InvalidTokenError(DomainError):
+    """Токен доступа невалиден: подпись, срок действия, тип или содержимое."""
+
+
 class RegistrationAlreadyExistsError(ConflictError):
     """Пользователь уже регистрировался на мероприятие."""
 
