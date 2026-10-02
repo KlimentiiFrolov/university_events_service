@@ -89,7 +89,7 @@ class EventService:
             "Event id=%d created by user id=%d with tags %s",
             event.id, organizer_id, tuple(tag_ids),
         )
-        return event
+        return await self._get_event(event.id, with_tags=True)
 
     async def get_event(
         self,
@@ -158,13 +158,13 @@ class EventService:
         for field, value in updates.items():
             setattr(event, field, value)
 
-        event = await self.uow.events.update(event)
+        await self.uow.events.update(event)
 
         log.info(
             "Event id=%d updated by user id=%d, fields: %s",
             event_id, organizer_id, tuple(updates),
         )
-        return event
+        return await self._get_event(event_id, with_tags=True)
 
     async def set_event_tags(
         self,

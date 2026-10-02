@@ -27,6 +27,14 @@ async def test_get_by_id_returns_none_for_missing_event(uow: UnitOfWork):
     assert await uow.events.get_by_id(999_999) is None
 
 
+async def test_get_by_id_returns_none_for_deleted_event(uow: UnitOfWork, make_event):
+    event = await make_event()
+    event.deleted_at = datetime(2026, 1, 1, tzinfo=UTC)
+    await uow.events.update(event)
+
+    assert await uow.events.get_by_id(event.id) is None
+
+
 async def test_get_by_id_with_tags_loads_relationship(uow: UnitOfWork, make_event, make_tag):
     event = await make_event()
     tag = await make_tag(name="IT")
@@ -80,6 +88,28 @@ async def test_list_filtered_by_tags_returns_only_tagged_events(
     titles = {event.title for event in events}
     assert matching.title in titles
     assert other.title not in titles
+
+
+async def test_list_filtered_loads_tags(uow: UnitOfWork, make_event, make_tag):
+    event = await make_event()
+    tag = await make_tag(name="IT")
+    await uow.event_tags.add_tags(event.id, [tag.id])
+
+    events = await uow.events.list_filtered()
+
+    tag_names = {event_tag.tag.name for event_tag in events[0].event_tags}
+    assert tag_names == {"IT"}
+
+
+async def test_list_by_organizer_loads_tags(uow: UnitOfWork, make_event, make_tag):
+    event = await make_event()
+    tag = await make_tag(name="IT")
+    await uow.event_tags.add_tags(event.id, [tag.id])
+
+    events = await uow.events.list_by_organizer(event.created_by_id)
+
+    tag_names = {event_tag.tag.name for event_tag in events[0].event_tags}
+    assert tag_names == {"IT"}
 
 
 async def test_list_by_organizer_returns_only_their_events(

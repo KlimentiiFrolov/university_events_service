@@ -80,6 +80,29 @@ async def test_create_event_with_tags_attaches_them(
     assert tag_names == {"IT"}
 
 
+async def test_create_event_returns_event_with_loaded_tags(
+    event_service: EventService,
+    make_user,
+    make_tag,
+):
+    organizer = await make_user()
+    tag = await make_tag(name="IT")
+
+    event = await event_service.create_event(
+        organizer.id,
+        CreateEventSchema(
+            title="Hackathon",
+            location="Main Hall",
+            event_date=datetime(2026, 2, 1, tzinfo=UTC),
+            capacity=50,
+            tag_ids=[tag.id],
+        ),
+    )
+
+    tag_names = {event_tag.tag.name for event_tag in event.event_tags}
+    assert tag_names == {"IT"}
+
+
 async def test_create_event_missing_organizer_raises_not_found(
     event_service: EventService,
 ):
@@ -220,6 +243,40 @@ async def test_update_event_updates_fields(
     assert updated.title == "New title"
 
 
+async def test_update_event_returns_event_with_loaded_tags(
+    event_service: EventService,
+    make_event,
+    make_tag,
+):
+    event = await make_event()
+    tag = await make_tag(name="IT")
+    await event_service.uow.event_tags.add_tags(event.id, [tag.id])
+
+    updated = await event_service.update_event(
+        event.id,
+        event.created_by_id,
+        UpdateEventSchema(title="New title"),
+    )
+
+    tag_names = {event_tag.tag.name for event_tag in updated.event_tags}
+    assert tag_names == {"IT"}
+
+
+async def test_update_event_raises_not_found_for_deleted_event(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    await event_service.delete_event(event.id, event.created_by_id)
+
+    with pytest.raises(NotFoundError):
+        await event_service.update_event(
+            event.id,
+            event.created_by_id,
+            UpdateEventSchema(title="New title"),
+        )
+
+
 async def test_update_event_raises_forbidden_for_non_owner(
     event_service: EventService,
     make_event,
@@ -350,6 +407,28 @@ async def test_delete_event_cancels_active_registrations(
     registrations = await registration_service.get_my_registrations(participant.id)
 
     assert registrations[0].status == RegistrationStatus.CANCELLED
+
+
+async def test_get_event_raises_not_found_for_deleted_event(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    await event_service.delete_event(event.id, event.created_by_id)
+
+    with pytest.raises(NotFoundError):
+        await event_service.get_event(event.id)
+
+
+async def test_delete_event_twice_raises_not_found(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    await event_service.delete_event(event.id, event.created_by_id)
+
+    with pytest.raises(NotFoundError):
+        await event_service.delete_event(event.id, event.created_by_id)
 
 
 async def test_delete_event_raises_forbidden_for_non_owner(
