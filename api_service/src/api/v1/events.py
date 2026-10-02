@@ -2,7 +2,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from dependencies import EventServiceDep, OrganizerDep
+from dependencies import (
+    EventServiceDep,
+    OrganizerDep,
+    RegistrationServiceDep,
+)
 from src.models.events import Event
 from src.schemas.events import (
     CreateEventSchema,
@@ -15,6 +19,11 @@ from src.schemas.events import (
 from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
 from src.schemas.pagination import PaginationParams
 from src.schemas.tags import TagResponse
+
+from src.schemas.registrations import (
+    ParticipantListResponse,
+    ParticipantResponse,
+)
 
 router = APIRouter(
     prefix="/events",
@@ -174,3 +183,41 @@ async def delete_event(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
         ) from error
+
+
+@router.get("/{event_id}/participants", response_model=ParticipantListResponse,)
+async def get_event_participants(
+    event_id: int,
+    service: RegistrationServiceDep,
+    organizer: OrganizerDep,
+) -> ParticipantListResponse:
+    try:
+        participants = await service.get_event_participants(
+            event_id,
+            organizer.id,
+        )
+    except NotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ForbiddenError as error:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(error),
+        ) from error
+
+    items = [
+        ParticipantResponse(
+            id=participant.id,
+            email=participant.email,
+            first_name=participant.first_name,
+            second_name=participant.second_name,
+        )
+        for participant in participants
+    ]
+
+    return ParticipantListResponse(
+        total=len(items),
+        items=items,
+    )

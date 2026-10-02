@@ -9,12 +9,12 @@ from src.models.registrations import (
 from src.models.users import User
 from src.schemas.exceptions.domain import (
     EventCapacityExceededError,
+    ForbiddenError,
     NotFoundError,
     RegistrationAlreadyActiveError,
     RegistrationAlreadyCancelledError,
     RegistrationAlreadyExistsError,
 )
-
 
 class RegistrationService:
     def __init__(self, uow: UnitOfWork):
@@ -46,6 +46,22 @@ class RegistrationService:
 
         log.debug("Event id=%d found (for_update=%s)", event_id, for_update)
         return event
+
+    def _ensure_event_owner(
+            self,
+            event: Event,
+            organizer_id: int,
+    ) -> None:
+        if event.created_by_id != organizer_id:
+            log.warning(
+                "User id=%d is not the organizer of event id=%d",
+                organizer_id,
+                event.id,
+            )
+            raise ForbiddenError(
+                f"User id={organizer_id} is not the organizer "
+                f"of event id={event.id}"
+            )
 
     async def _get_registration(
         self,
@@ -197,14 +213,27 @@ class RegistrationService:
         return registrations
 
     async def get_event_participants(
-        self,
-        event_id: int,
+            self,
+            event_id: int,
+            organizer_id: int,
     ) -> list[User]:
-        await self._get_event(event_id)
+        event = await self._get_event(event_id)
 
-        participants = await self.uow.registrations.get_event_participants(
-            event_id
+        self._ensure_event_owner(
+            event,
+            organizer_id,
         )
 
-        log.debug("Listed %d participants of event id=%d", len(participants), event_id)
+        participants = (
+            await self.uow.registrations.get_event_participants(
+                event_id
+            )
+        )
+
+        log.debug(
+            "Listed %d participants of event id=%d",
+            len(participants),
+            event_id,
+        )
+
         return participants
