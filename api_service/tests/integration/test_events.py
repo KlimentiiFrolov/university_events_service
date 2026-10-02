@@ -409,3 +409,214 @@ async def test_create_event_requires_mandatory_fields(
     )
 
     assert response.status_code == 422
+
+
+# PATCH /events/{event_id}
+
+
+@pytest.fixture
+async def organizer(make_user) -> User:
+    return await make_user(role=RoleName.ORGANIZER)
+
+
+@pytest.fixture
+async def own_event(make_event, organizer: User) -> Event:
+    return await make_event(created_by_id=organizer.id)
+
+
+async def test_update_event_changes_passed_fields_only(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    changes = {"title": f"{own_event.title} (updated)", "capacity": own_event.capacity + 5}
+
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json=changes,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == changes["title"]
+    assert body["capacity"] == changes["capacity"]
+    assert body["text"] == own_event.text
+    assert body["location"] == own_event.location
+
+
+async def test_update_event_is_persisted(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    updated = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json={"location": f"{own_event.location} (moved)"},
+    )
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{own_event.id}")
+
+    assert fetched.json() == updated.json()
+
+
+async def test_update_event_keeps_tags(
+    api_client: AsyncClient,
+    event_service,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    await event_service.set_event_tags(own_event.id, organizer.id, [tag.id for tag in seed_tags])
+
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json={"title": f"{own_event.title} (updated)"},
+    )
+
+    assert response.status_code == 200
+    assert _tag_names(response.json()) == {tag.name for tag in seed_tags}
+
+
+async def test_update_event_clears_text_with_null(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    assert own_event.text is not None
+
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json={"text": None},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["text"] is None
+
+
+async def test_update_event_with_empty_body_changes_nothing(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    before = await api_client.get(f"{EVENTS_URL}/{own_event.id}")
+
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json={},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == before.json()
+
+
+async def test_update_event_requires_auth(
+    api_client: AsyncClient,
+    own_event: Event,
+) -> None:
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        json={"title": "Anything"},
+    )
+
+    assert response.status_code == 401
+
+
+async def test_update_event_by_not_owner(
+    api_client: AsyncClient,
+    make_user,
+    own_event: Event,
+) -> None:
+    other_organizer = await make_user(role=RoleName.ORGANIZER)
+    event_id, original_title = own_event.id, own_event.title
+
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{event_id}",
+        headers=_auth_headers(other_organizer),
+        json={"title": f"{original_title} (hijacked)"},
+    )
+
+    assert response.status_code == 403
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{event_id}")
+    assert fetched.json()["title"] == original_title
+
+
+async def test_update_event_not_found(
+    api_client: AsyncClient,
+    organizer: User,
+) -> None:
+    response = await api_client.patch(
+        f"{EVENTS_URL}/999999",
+        headers=_auth_headers(organizer),
+        json={"title": "Anything"},
+    )
+
+    assert response.status_code == 404
+
+
+async def test_update_event_deleted_returns_not_found(
+    api_client: AsyncClient,
+    event_service,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    await event_service.delete_event(own_event.id, organizer.id)
+
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json={"title": "Resurrected"},
+    )
+
+    assert response.status_code == 404
+
+
+async def test_update_event_capacity_below_active_registrations(
+    api_client: AsyncClient,
+    registration_service,
+    make_user,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    participant = await make_user()
+    await registration_service.register(participant.id, own_event.id)
+
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json={"capacity": 0},
+    )
+
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        pytest.param({"title": None}, id="null-title"),
+        pytest.param({"location": None}, id="null-location"),
+        pytest.param({"event_date": None}, id="null-event-date"),
+        pytest.param({"capacity": None}, id="null-capacity"),
+        pytest.param({"title": ""}, id="empty-title"),
+        pytest.param({"capacity": -1}, id="negative-capacity"),
+        pytest.param({"event_date": "not-a-date"}, id="invalid-date"),
+    ],
+)
+async def test_update_event_rejects_invalid_body(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+    changes: dict,
+) -> None:
+    response = await api_client.patch(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+        json=changes,
+    )
+
+    assert response.status_code == 422
