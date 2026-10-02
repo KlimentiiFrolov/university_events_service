@@ -7,6 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.core.tokens import create_access_token
 from src.models.event_tags import EventTag
 from src.models.events import Event
 from src.models.registrations import Registration, RegistrationStatus
@@ -44,9 +45,8 @@ def _tag_names_by_event(
     return result
 
 
-# TODO: заменить на Authorization: Bearer после появления зависимости авторизации по JWT
 def _auth_headers(user: User) -> dict[str, str]:
-    return {"X-User-Id": str(user.id)}
+    return {"Authorization": f"Bearer {create_access_token(user.id)}"}
 
 
 # GET /events
@@ -340,16 +340,16 @@ async def test_create_event_requires_auth(api_client: AsyncClient) -> None:
     assert response.status_code == 401
 
 
-async def test_create_event_with_unknown_user(
+async def test_create_event_with_token_of_unknown_user(
     api_client: AsyncClient,
 ) -> None:
     response = await api_client.post(
         EVENTS_URL,
-        headers={"X-User-Id": "999999"},
+        headers={"Authorization": f"Bearer {create_access_token(999999)}"},
         json=EVENT_BODY,
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 401
 
 
 async def test_create_event_with_unknown_tag(
@@ -1145,3 +1145,66 @@ async def test_list_my_events_rejects_invalid_pagination(
     response = await api_client.get(MY_EVENTS_URL, headers=_auth_headers(organizer), params=params)
 
     assert response.status_code == 422
+
+
+# Доступ по ролям ко всем эндпоинтам организатора
+
+ORGANIZER_ENDPOINTS = [
+    pytest.param("POST", EVENTS_URL, EVENT_BODY, id="create"),
+    pytest.param("GET", MY_EVENTS_URL, None, id="list-my"),
+    pytest.param("PATCH", f"{EVENTS_URL}/{{event_id}}", {"title": "Changed"}, id="update"),
+    pytest.param("PUT", f"{EVENTS_URL}/{{event_id}}/tags", {"tag_ids": []}, id="set-tags"),
+    pytest.param("DELETE", f"{EVENTS_URL}/{{event_id}}", None, id="delete"),
+]
+
+
+@pytest.mark.parametrize("method,url,body", ORGANIZER_ENDPOINTS)
+async def test_organizer_endpoints_forbid_participant(
+    api_client: AsyncClient,
+    make_user,
+    own_event: Event,
+    method: str,
+    url: str,
+    body: dict | None,
+) -> None:
+    participant = await make_user(role=RoleName.PARTICIPANT)
+    event_id = own_event.id
+
+    response = await api_client.request(
+        method,
+        url.format(event_id=event_id),
+        headers=_auth_headers(participant),
+        json=body,
+    )
+
+    assert response.status_code == 403
+
+    # Событие не изменилось и не удалено
+    fetched = await api_client.get(f"{EVENTS_URL}/{event_id}")
+    assert fetched.status_code == 200
+
+
+@pytest.mark.parametrize("method,url,body", ORGANIZER_ENDPOINTS)
+@pytest.mark.parametrize(
+    "headers",
+    [
+        pytest.param({}, id="no-header"),
+        pytest.param({"Authorization": "Bearer not-a-jwt"}, id="invalid-token"),
+    ],
+)
+async def test_organizer_endpoints_require_valid_token(
+    api_client: AsyncClient,
+    own_event: Event,
+    method: str,
+    url: str,
+    body: dict | None,
+    headers: dict,
+) -> None:
+    response = await api_client.request(
+        method,
+        url.format(event_id=own_event.id),
+        headers=headers,
+        json=body,
+    )
+
+    assert response.status_code == 401
