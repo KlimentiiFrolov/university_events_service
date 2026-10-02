@@ -153,7 +153,7 @@ class EventService:
         if data.capacity is not None:
             await self._validate_capacity(event_id, data.capacity)
 
-        updates = data.model_dump(exclude_none=True)
+        updates = data.model_dump(exclude_unset=True)
 
         for field, value in updates.items():
             setattr(event, field, value)
