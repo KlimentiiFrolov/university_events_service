@@ -37,6 +37,18 @@ async def test_list_by_names_returns_matching_tags(uow: UnitOfWork, make_tag):
     assert {tag.id for tag in tags} == {first.id, second.id}
 
 
+async def test_list_ordered_by_name_returns_all_tags_sorted(uow: UnitOfWork, make_tag):
+    tags = [await make_tag(name=name) for name in ("Sport", "Career", "IT")]
+
+    listed = await uow.tags.list_ordered_by_name()
+
+    assert [tag.id for tag in listed] == [tag.id for tag in sorted(tags, key=lambda tag: tag.name)]
+
+
+async def test_list_ordered_by_name_returns_empty_list(uow: UnitOfWork):
+    assert await uow.tags.list_ordered_by_name() == []
+
+
 async def test_list_by_ids_returns_matching_tags(uow: UnitOfWork, make_tag):
     first = await make_tag(name="IT")
     second = await make_tag(name="Career")
