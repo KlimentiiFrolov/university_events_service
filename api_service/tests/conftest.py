@@ -1,9 +1,10 @@
+import asyncio
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import NullPool, select
+from sqlalchemy import NullPool, insert, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
 from testcontainers.postgres import PostgresContainer
 
 from src.core.logger import log
+from src.core.passwords import hash_password
 from src.core.uow import UnitOfWork
 from src.models import Base
 from src.models.event_tags import EventTag
@@ -22,11 +24,9 @@ from src.models.tags import Tag
 from src.models.users import User
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
+from src.services.tags import TagService
 from src.services.users import UserService
-from src.core.passwords import hash_password
 
-# В тестах логи приложения отдаются в root-логгер, чтобы их перехватывал pytest
-# (log_cli / caplog), а свой StreamHandler убирается, чтобы не дублировать вывод в stderr.
 log.handlers.clear()
 log.propagate = True
 
@@ -40,54 +40,64 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
         yield postgres
 
 
-def create_db_url(postgres_container: PostgresContainer) -> str:
+@pytest.fixture(scope="session")
+def db_url(postgres_container: PostgresContainer) -> str:
     raw_url = postgres_container.get_connection_url()
     return raw_url.replace("postgresql+psycopg2", "postgresql+asyncpg", 1)
 
 
-@pytest.fixture(scope="function")
-async def engine(postgres_container: PostgresContainer) -> AsyncGenerator[AsyncEngine, None]:
-    db_url = create_db_url(postgres_container)
-    # NullPool, чтобы соединения не переиспользовались между тестами, запущенными в разных event loop
-    engine = create_async_engine(db_url, poolclass=NullPool)
+@pytest.fixture(scope="session")
+def db_schema(db_url: str) -> None:
+    """Схема создаётся один раз на весь прогон."""
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    async def _create_schema() -> None:
+        engine = create_async_engine(db_url, poolclass=NullPool)
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        await engine.dispose()
+
+    asyncio.run(_create_schema())
+
+
+@pytest.fixture(scope="function")
+async def engine(db_url: str, db_schema: None) -> AsyncGenerator[AsyncEngine, None]:
+    engine = create_async_engine(db_url)
 
     yield engine
 
     await engine.dispose()
 
+# На маленьких данных DELETE будет быстрее TRUNCATE
+@pytest.fixture(scope="function")
+async def clean_db(engine: AsyncEngine) -> None:
+    async with engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            await connection.execute(table.delete())
+        await connection.execute(
+            insert(Role).values(
+                [{"name": role_name} for role_name in RoleName]
+            )
+        )
+
 
 @pytest.fixture(scope="function")
-async def async_session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    """Создаёт сессию, обёрнутую во внешнюю транзакцию, откатываемую после теста."""
-    async_session_factory = async_sessionmaker(
-        engine, expire_on_commit=False, class_=AsyncSession
-    )
-    connection = await engine.connect()
-    transaction = await connection.begin()
+def session_maker(
+    engine: AsyncEngine,
+    clean_db: None,
+) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-    session = async_session_factory(bind=connection)
 
-    try:
+@pytest.fixture(scope="function")
+async def async_session(
+    session_maker: async_sessionmaker[AsyncSession],
+) -> AsyncGenerator[AsyncSession, None]:
+    async with session_maker() as session:
         yield session
-    finally:
-        await session.close()
-        await transaction.rollback()
-        await connection.close()
 
 
-@pytest.fixture()
-async def seed_roles(async_session: AsyncSession) -> None:
-    async_session.add_all([Role(name=role_name) for role_name in RoleName])
-    await async_session.flush()
-
-
-@pytest.fixture()
-async def uow(async_session: AsyncSession, seed_roles: None) -> AsyncGenerator[UnitOfWork, None]:
-    """UnitOfWork поверх сессии теста: commit() внутри теста коммитит только
-    в рамках внешней транзакции async_session, которая в итоге откатывается."""
+@pytest.fixture
+async def uow(async_session: AsyncSession) -> AsyncGenerator[UnitOfWork, None]:
     unit_of_work = UnitOfWork(session_factory=lambda: async_session)
 
     async with unit_of_work:
@@ -110,6 +120,11 @@ def event_service(uow: UnitOfWork) -> EventService:
 
 
 @pytest.fixture()
+def tag_service(uow: UnitOfWork) -> TagService:
+    return TagService(uow=uow)
+
+
+@pytest.fixture()
 def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
     async def _make_user(
         email: str | None = None,
@@ -121,7 +136,7 @@ def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
         email = email or f"user-{uuid.uuid4().hex}@example.com"
         role_entity = await uow.roles.get_by_name(role)
 
-        return await uow.users.add(
+        user = await uow.users.add(
             User(
                 email=email,
                 first_name=first_name,
@@ -130,6 +145,9 @@ def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
                 password_hash=password_hash,
             )
         )
+        await uow.commit()
+
+        return user
 
     return _make_user
 
@@ -138,7 +156,11 @@ def make_user(uow: UnitOfWork) -> Callable[..., Awaitable[User]]:
 def make_tag(uow: UnitOfWork) -> Callable[..., Awaitable[Tag]]:
     async def _make_tag(name: str | None = None) -> Tag:
         name = name or f"tag-{uuid.uuid4().hex[:8]}"
-        return await uow.tags.add(Tag(name=name))
+
+        tag = await uow.tags.add(Tag(name=name))
+        await uow.commit()
+
+        return tag
 
     return _make_tag
 
@@ -160,7 +182,7 @@ def make_event(
             organizer = await make_user(role=RoleName.ORGANIZER)
             created_by_id = organizer.id
 
-        return await uow.events.add(
+        event = await uow.events.add(
             Event(
                 title=title,
                 text="description",
@@ -170,6 +192,9 @@ def make_event(
                 created_by_id=created_by_id,
             )
         )
+        await uow.commit()
+
+        return event
 
     return _make_event
 
@@ -208,7 +233,7 @@ async def seed_users(async_session: AsyncSession) -> list[User]:
     ]
 
     async_session.add_all(users)
-    await async_session.flush()
+    await async_session.commit()
 
     return users
 

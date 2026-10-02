@@ -18,19 +18,20 @@ async def test_create_event_persists_event(
     make_user,
 ):
     organizer = await make_user()
-
-    event = await event_service.create_event(
-        organizer.id,
-        CreateEventSchema(
-            title="Lecture",
-            location="Room 101",
-            event_date=datetime(2026, 1, 10, tzinfo=UTC),
-            capacity=30,
-        ),
+    data = CreateEventSchema(
+        title="Lecture",
+        location="Room 101",
+        event_date=datetime(2026, 1, 10, tzinfo=UTC),
+        capacity=30,
     )
 
+    event = await event_service.create_event(organizer.id, data)
+
     assert event.id is not None
-    assert event.title == "Lecture"
+    assert event.title == data.title
+    assert event.location == data.location
+    assert event.event_date == data.event_date
+    assert event.capacity == data.capacity
     assert event.created_by_id == organizer.id
 
 
@@ -77,7 +78,30 @@ async def test_create_event_with_tags_attaches_them(
     fetched = await event_service.get_event(event.id)
     tag_names = {event_tag.tag.name for event_tag in fetched.event_tags}
 
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
+
+
+async def test_create_event_returns_event_with_loaded_tags(
+    event_service: EventService,
+    make_user,
+    make_tag,
+):
+    organizer = await make_user()
+    tag = await make_tag(name="IT")
+
+    event = await event_service.create_event(
+        organizer.id,
+        CreateEventSchema(
+            title="Hackathon",
+            location="Main Hall",
+            event_date=datetime(2026, 2, 1, tzinfo=UTC),
+            capacity=50,
+            tag_ids=[tag.id],
+        ),
+    )
+
+    tag_names = {event_tag.tag.name for event_tag in event.event_tags}
+    assert tag_names == {tag.name}
 
 
 async def test_create_event_missing_organizer_raises_not_found(
@@ -126,7 +150,7 @@ async def test_get_event_returns_event_with_tags_by_default(
     fetched = await event_service.get_event(event.id)
     tag_names = {event_tag.tag.name for event_tag in fetched.event_tags}
 
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_get_event_raises_not_found_for_missing_event(
@@ -179,15 +203,15 @@ async def test_list_events_respects_pagination(
     event_service: EventService,
     make_event,
 ):
-    await make_event(title="First", event_date=datetime(2026, 1, 1, tzinfo=UTC))
-    await make_event(title="Second", event_date=datetime(2026, 1, 2, tzinfo=UTC))
-    await make_event(title="Third", event_date=datetime(2026, 1, 3, tzinfo=UTC))
+    first = await make_event(event_date=datetime(2026, 1, 1, tzinfo=UTC))
+    second = await make_event(event_date=datetime(2026, 1, 2, tzinfo=UTC))
+    third = await make_event(event_date=datetime(2026, 1, 3, tzinfo=UTC))
 
     first_page = await event_service.list_events(limit=2, offset=0)
     second_page = await event_service.list_events(limit=2, offset=2)
 
-    assert [event.title for event in first_page] == ["First", "Second"]
-    assert [event.title for event in second_page] == ["Third"]
+    assert [event.id for event in first_page] == [first.id, second.id]
+    assert [event.id for event in second_page] == [third.id]
 
 
 async def test_list_organizer_events_returns_only_own_events(
@@ -210,6 +234,64 @@ async def test_update_event_updates_fields(
     make_event,
 ):
     event = await make_event(title="Old title")
+    data = UpdateEventSchema(title="New title")
+
+    updated = await event_service.update_event(
+        event.id,
+        event.created_by_id,
+        data,
+    )
+
+    assert updated.title == data.title
+
+
+async def test_update_event_keeps_fields_that_were_not_passed(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    before = {
+        "title": event.title,
+        "text": event.text,
+        "location": event.location,
+        "event_date": event.event_date,
+    }
+    new_capacity = event.capacity + 1
+
+    updated = await event_service.update_event(
+        event.id,
+        event.created_by_id,
+        UpdateEventSchema(capacity=new_capacity),
+    )
+
+    assert updated.capacity == new_capacity
+    assert {field: getattr(updated, field) for field in before} == before
+
+
+async def test_update_event_clears_text_with_explicit_null(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    assert event.text is not None
+
+    updated = await event_service.update_event(
+        event.id,
+        event.created_by_id,
+        UpdateEventSchema(text=None),
+    )
+
+    assert updated.text is None
+
+
+async def test_update_event_returns_event_with_loaded_tags(
+    event_service: EventService,
+    make_event,
+    make_tag,
+):
+    event = await make_event()
+    tag = await make_tag(name="IT")
+    await event_service.uow.event_tags.add_tags(event.id, [tag.id])
 
     updated = await event_service.update_event(
         event.id,
@@ -217,7 +299,23 @@ async def test_update_event_updates_fields(
         UpdateEventSchema(title="New title"),
     )
 
-    assert updated.title == "New title"
+    tag_names = {event_tag.tag.name for event_tag in updated.event_tags}
+    assert tag_names == {tag.name}
+
+
+async def test_update_event_raises_not_found_for_deleted_event(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    await event_service.delete_event(event.id, event.created_by_id)
+
+    with pytest.raises(NotFoundError):
+        await event_service.update_event(
+            event.id,
+            event.created_by_id,
+            UpdateEventSchema(title="New title"),
+        )
 
 
 async def test_update_event_raises_forbidden_for_non_owner(
@@ -286,7 +384,7 @@ async def test_set_event_tags_replaces_full_set(
     )
 
     tag_names = {event_tag.tag.name for event_tag in updated.event_tags}
-    assert tag_names == {"New"}
+    assert tag_names == {new_tag.name}
 
 
 async def test_set_event_tags_raises_forbidden_for_non_owner(
@@ -350,6 +448,28 @@ async def test_delete_event_cancels_active_registrations(
     registrations = await registration_service.get_my_registrations(participant.id)
 
     assert registrations[0].status == RegistrationStatus.CANCELLED
+
+
+async def test_get_event_raises_not_found_for_deleted_event(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    await event_service.delete_event(event.id, event.created_by_id)
+
+    with pytest.raises(NotFoundError):
+        await event_service.get_event(event.id)
+
+
+async def test_delete_event_twice_raises_not_found(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+    await event_service.delete_event(event.id, event.created_by_id)
+
+    with pytest.raises(NotFoundError):
+        await event_service.delete_event(event.id, event.created_by_id)
 
 
 async def test_delete_event_raises_forbidden_for_non_owner(
