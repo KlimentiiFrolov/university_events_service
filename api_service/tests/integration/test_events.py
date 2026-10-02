@@ -83,6 +83,7 @@ async def test_list_events_returns_empty_list(api_client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["items"] == []
+    assert body["per_page"] == 0
     assert body["page"] == PaginationParams().page
 
 
@@ -173,6 +174,7 @@ async def test_list_events_paginates(
     body = response.json()
     assert _titles(body) == expected
     assert body["page"] == page
+    assert body["per_page"] == len(expected)
 
 
 @pytest.mark.parametrize(
@@ -1065,6 +1067,7 @@ async def test_list_my_events_returns_empty_list(
     assert response.status_code == 200
     body = response.json()
     assert body["items"] == []
+    assert body["per_page"] == 0
     assert body["page"] == PaginationParams().page
 
 
@@ -1101,6 +1104,7 @@ async def test_list_my_events_paginates(
     body = response.json()
     assert [event["id"] for event in body["items"]] == expected_ids
     assert body["page"] == page
+    assert body["per_page"] == len(expected_ids)
 
 
 async def test_list_my_events_ignores_catalog_filters(

@@ -52,7 +52,7 @@ async def list_organizer_events(
 
     return EventListResponse(
         page=filters.page,
-        total=5,
+        per_page=len(events),
         items=[_to_event_response(event) for event in events]
     )
 
@@ -67,7 +67,7 @@ async def list_events(
 
     return EventListResponse(
         page=filters.page,
-        total=5,
+        per_page=len(events),
         items=[_to_event_response(event) for event in events],
     )
 
