@@ -9,6 +9,7 @@ from src.schemas.events import (
     EventFilterParams,
     EventListResponse,
     EventResponse,
+    SetEventTagsSchema,
     UpdateEventSchema,
 )
 from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
@@ -107,6 +108,29 @@ async def update_event(
     except ConflictError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+
+    return _to_event_response(event)
+
+
+@router.put("/{event_id}/tags", response_model=EventResponse)
+async def set_event_tags(
+    event_id: int,
+    data: SetEventTagsSchema,
+    service: EventServiceDep,
+    user_id: CurrentUserIdDep,
+) -> EventResponse:
+    try:
+        event = await service.set_event_tags(event_id, user_id, data.tag_ids)
+    except NotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ForbiddenError as error:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
         ) from error
 
