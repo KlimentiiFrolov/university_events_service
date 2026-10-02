@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
@@ -6,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.core.logger import log
 from src.core.tokens import decode_access_token
 from src.core.uow import UnitOfWork, get_uow
+from src.models.roles import RoleName
 from src.models.users import User
 from src.schemas.exceptions.domain import InvalidTokenError, NotFoundError
 from src.services.auth import AuthService
@@ -87,3 +89,30 @@ async def get_current_user(
 
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+def require_roles(*roles: RoleName) -> Callable[..., Awaitable[User]]:
+    if not roles:
+        raise ValueError("require_roles() needs at least one role")
+
+    allowed = frozenset(roles)
+
+    async def _require_roles(user: CurrentUserDep) -> User:
+        if user.role.name not in allowed:
+            log.warning(
+                "User id=%d with role=%s has no access, required one of: %s",
+                user.id, user.role.name, ", ".join(sorted(allowed)),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions",
+            )
+
+        return user
+
+    return _require_roles
+
+
+OrganizerDep = Annotated[User, Depends(require_roles(RoleName.ORGANIZER))]
+ParticipantDep = Annotated[User, Depends(require_roles(RoleName.PARTICIPANT))]
+AnyRoleDep = Annotated[User, Depends(require_roles(*RoleName))]
