@@ -7,6 +7,7 @@ from src.schemas.events import (
     CreateEventSchema,
     EventFilterParams,
     SetEventTagsSchema,
+    UpdateEventSchema,
 )
 
 EVENT_DATA = {
@@ -37,6 +38,28 @@ def test_create_event_removes_duplicate_tag_ids():
 
 def test_create_event_without_tag_ids_keeps_none():
     assert CreateEventSchema(**EVENT_DATA).tag_ids is None
+
+
+@pytest.mark.parametrize("field", ["title", "location", "event_date", "capacity"])
+def test_update_event_rejects_null_for_required_fields(field: str):
+    with pytest.raises(ValidationError, match=f"{field} cannot be null"):
+        UpdateEventSchema(**{field: None})
+
+
+def test_update_event_allows_null_text():
+    schema = UpdateEventSchema(text=None)
+
+    assert schema.model_dump(exclude_unset=True) == {"text": None}
+
+
+def test_update_event_dumps_only_passed_fields():
+    schema = UpdateEventSchema(title=EVENT_DATA["title"])
+
+    assert schema.model_dump(exclude_unset=True) == {"title": EVENT_DATA["title"]}
+
+
+def test_update_event_empty_body_has_no_changes():
+    assert UpdateEventSchema().model_dump(exclude_unset=True) == {}
 
 
 @pytest.mark.parametrize("tag_id", [0, -1])
