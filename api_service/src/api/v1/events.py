@@ -2,9 +2,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from dependencies import EventServiceDep
+from dependencies import CurrentUserIdDep, EventServiceDep
 from src.models.events import Event
-from src.schemas.events import EventFilterParams, EventListResponse, EventResponse
+from src.schemas.events import (
+    CreateEventSchema,
+    EventFilterParams,
+    EventListResponse,
+    EventResponse,
+)
 from src.schemas.exceptions.domain import NotFoundError
 from src.schemas.tags import TagResponse
 
@@ -53,6 +58,23 @@ async def get_event(
 ) -> EventResponse:
     try:
         event = await service.get_event(event_id)
+    except NotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return _to_event_response(event)
+
+
+@router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
+async def create_event(
+    data: CreateEventSchema,
+    service: EventServiceDep,
+    user_id: CurrentUserIdDep,
+) -> EventResponse:
+    try:
+        event = await service.create_event(user_id, data)
     except NotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
