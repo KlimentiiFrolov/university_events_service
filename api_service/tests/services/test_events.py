@@ -18,19 +18,20 @@ async def test_create_event_persists_event(
     make_user,
 ):
     organizer = await make_user()
-
-    event = await event_service.create_event(
-        organizer.id,
-        CreateEventSchema(
-            title="Lecture",
-            location="Room 101",
-            event_date=datetime(2026, 1, 10, tzinfo=UTC),
-            capacity=30,
-        ),
+    data = CreateEventSchema(
+        title="Lecture",
+        location="Room 101",
+        event_date=datetime(2026, 1, 10, tzinfo=UTC),
+        capacity=30,
     )
 
+    event = await event_service.create_event(organizer.id, data)
+
     assert event.id is not None
-    assert event.title == "Lecture"
+    assert event.title == data.title
+    assert event.location == data.location
+    assert event.event_date == data.event_date
+    assert event.capacity == data.capacity
     assert event.created_by_id == organizer.id
 
 
@@ -77,7 +78,7 @@ async def test_create_event_with_tags_attaches_them(
     fetched = await event_service.get_event(event.id)
     tag_names = {event_tag.tag.name for event_tag in fetched.event_tags}
 
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_create_event_returns_event_with_loaded_tags(
@@ -100,7 +101,7 @@ async def test_create_event_returns_event_with_loaded_tags(
     )
 
     tag_names = {event_tag.tag.name for event_tag in event.event_tags}
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_create_event_missing_organizer_raises_not_found(
@@ -149,7 +150,7 @@ async def test_get_event_returns_event_with_tags_by_default(
     fetched = await event_service.get_event(event.id)
     tag_names = {event_tag.tag.name for event_tag in fetched.event_tags}
 
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_get_event_raises_not_found_for_missing_event(
@@ -202,15 +203,15 @@ async def test_list_events_respects_pagination(
     event_service: EventService,
     make_event,
 ):
-    await make_event(title="First", event_date=datetime(2026, 1, 1, tzinfo=UTC))
-    await make_event(title="Second", event_date=datetime(2026, 1, 2, tzinfo=UTC))
-    await make_event(title="Third", event_date=datetime(2026, 1, 3, tzinfo=UTC))
+    first = await make_event(event_date=datetime(2026, 1, 1, tzinfo=UTC))
+    second = await make_event(event_date=datetime(2026, 1, 2, tzinfo=UTC))
+    third = await make_event(event_date=datetime(2026, 1, 3, tzinfo=UTC))
 
     first_page = await event_service.list_events(limit=2, offset=0)
     second_page = await event_service.list_events(limit=2, offset=2)
 
-    assert [event.title for event in first_page] == ["First", "Second"]
-    assert [event.title for event in second_page] == ["Third"]
+    assert [event.id for event in first_page] == [first.id, second.id]
+    assert [event.id for event in second_page] == [third.id]
 
 
 async def test_list_organizer_events_returns_only_own_events(
@@ -233,14 +234,15 @@ async def test_update_event_updates_fields(
     make_event,
 ):
     event = await make_event(title="Old title")
+    data = UpdateEventSchema(title="New title")
 
     updated = await event_service.update_event(
         event.id,
         event.created_by_id,
-        UpdateEventSchema(title="New title"),
+        data,
     )
 
-    assert updated.title == "New title"
+    assert updated.title == data.title
 
 
 async def test_update_event_returns_event_with_loaded_tags(
@@ -259,7 +261,7 @@ async def test_update_event_returns_event_with_loaded_tags(
     )
 
     tag_names = {event_tag.tag.name for event_tag in updated.event_tags}
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_update_event_raises_not_found_for_deleted_event(
@@ -343,7 +345,7 @@ async def test_set_event_tags_replaces_full_set(
     )
 
     tag_names = {event_tag.tag.name for event_tag in updated.event_tags}
-    assert tag_names == {"New"}
+    assert tag_names == {new_tag.name}
 
 
 async def test_set_event_tags_raises_forbidden_for_non_owner(

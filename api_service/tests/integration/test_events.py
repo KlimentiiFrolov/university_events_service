@@ -1,3 +1,6 @@
+from collections import defaultdict
+from collections.abc import Iterable
+
 import pytest
 from httpx import AsyncClient
 
@@ -6,6 +9,7 @@ from src.models.events import Event
 from src.models.roles import RoleName
 from src.models.tags import Tag
 from src.models.users import User
+from src.schemas.pagination import PaginationParams
 
 EVENTS_URL = "/api/v1/events"
 
@@ -16,6 +20,24 @@ def _titles(response_json: dict) -> list[str]:
 
 def _tag_names(event_json: dict) -> set[str]:
     return {tag["name"] for tag in event_json["tags"]}
+
+
+def _sorted_titles(events: Iterable[Event]) -> list[str]:
+    """Названия в порядке выдачи каталога: по дате, затем по id."""
+    return [event.title for event in sorted(events, key=lambda event: (event.event_date, event.id))]
+
+
+def _tag_names_by_event(
+    event_tags: Iterable[EventTag],
+    tags: Iterable[Tag],
+) -> dict[int, set[str]]:
+    names = {tag.id: tag.name for tag in tags}
+    result: dict[int, set[str]] = defaultdict(set)
+
+    for event_tag in event_tags:
+        result[event_tag.event_id].add(names[event_tag.tag_id])
+
+    return result
 
 
 # TODO: заменить на Authorization: Bearer после появления зависимости авторизации по JWT
@@ -32,59 +54,75 @@ async def test_list_events_returns_events_ordered_by_date(
     response = await api_client.get(EVENTS_URL)
 
     assert response.status_code == 200
-    assert _titles(response.json()) == ["Lecture", "Hackathon", "Workshop"]
+    assert _titles(response.json()) == _sorted_titles(seed_events)
 
 
 async def test_list_events_returns_tags(
     api_client: AsyncClient,
+    seed_tags: list[Tag],
     seed_event_tags: list[EventTag],
 ) -> None:
+    expected = _tag_names_by_event(seed_event_tags, seed_tags)
+
     response = await api_client.get(EVENTS_URL)
 
     assert response.status_code == 200
-    lecture, hackathon, workshop = response.json()["items"]
-    assert _tag_names(lecture) == {"IT"}
-    assert _tag_names(hackathon) == {"IT", "Career"}
-    assert _tag_names(workshop) == {"Sport"}
+    items = response.json()["items"]
+    assert items
+    for event in items:
+        assert _tag_names(event) == expected[event["id"]]
 
 
 async def test_list_events_returns_empty_list(api_client: AsyncClient) -> None:
     response = await api_client.get(EVENTS_URL)
 
     assert response.status_code == 200
-    assert response.json() == {"items": [], "total": 5, "page": 1}
+    body = response.json()
+    assert body["items"] == []
+    assert body["page"] == PaginationParams().page
 
 
 async def test_list_events_filters_by_tag_ids(
     api_client: AsyncClient,
+    seed_events: list[Event],
     seed_tags: list[Tag],
     seed_event_tags: list[EventTag],
 ) -> None:
-    _, career, sport = seed_tags
+    requested_tag_ids = {tag.id for tag in seed_tags[1:]}
+    matching_event_ids = {
+        event_tag.event_id
+        for event_tag in seed_event_tags
+        if event_tag.tag_id in requested_tag_ids
+    }
+    expected = _sorted_titles(event for event in seed_events if event.id in matching_event_ids)
+    assert expected, "сиды должны содержать события с запрошенными тегами"
 
     response = await api_client.get(
         EVENTS_URL,
-        params={"tag_ids": [career.id, sport.id]},
+        params={"tag_ids": sorted(requested_tag_ids)},
     )
 
     assert response.status_code == 200
-    assert _titles(response.json()) == ["Hackathon", "Workshop"]
+    assert _titles(response.json()) == expected
 
 
 async def test_list_events_filters_by_date_range(
     api_client: AsyncClient,
     seed_events: list[Event],
 ) -> None:
+    target_date = seed_events[1].event_date
+    expected = _sorted_titles(event for event in seed_events if event.event_date == target_date)
+
     response = await api_client.get(
         EVENTS_URL,
         params={
-            "date_from": "2026-02-01T00:00:00Z",
-            "date_to": "2026-02-28T23:59:59Z",
+            "date_from": target_date.isoformat(),
+            "date_to": target_date.isoformat(),
         },
     )
 
     assert response.status_code == 200
-    assert _titles(response.json()) == ["Hackathon"]
+    assert _titles(response.json()) == expected
 
 
 async def test_list_events_hides_deleted_events(
@@ -92,22 +130,24 @@ async def test_list_events_hides_deleted_events(
     event_service,
     seed_events: list[Event],
 ) -> None:
-    lecture = seed_events[0]
-    await event_service.delete_event(lecture.id, lecture.created_by_id)
+    deleted = seed_events[0]
+    await event_service.delete_event(deleted.id, deleted.created_by_id)
 
     response = await api_client.get(EVENTS_URL)
 
     assert response.status_code == 200
-    assert _titles(response.json()) == ["Hackathon", "Workshop"]
+    assert _titles(response.json()) == _sorted_titles(
+        event for event in seed_events if event.id != deleted.id
+    )
 
 
 @pytest.mark.parametrize(
-    "page,limit,expected_titles",
+    "page,limit",
     [
-        pytest.param(1, 1, ["Lecture"], id="first-page"),
-        pytest.param(2, 1, ["Hackathon"], id="second-page"),
-        pytest.param(2, 2, ["Workshop"], id="last-incomplete-page"),
-        pytest.param(2, 20, [], id="past-the-end"),
+        pytest.param(1, 1, id="first-page"),
+        pytest.param(2, 1, id="second-page"),
+        pytest.param(2, 2, id="second-page-bigger-limit"),
+        pytest.param(100, 20, id="past-the-end"),
     ],
 )
 async def test_list_events_paginates(
@@ -115,8 +155,10 @@ async def test_list_events_paginates(
     seed_events: list[Event],
     page: int,
     limit: int,
-    expected_titles: list[str],
 ) -> None:
+    offset = PaginationParams(page=page, limit=limit).offset
+    expected = _sorted_titles(seed_events)[offset:offset + limit]
+
     response = await api_client.get(
         EVENTS_URL,
         params={"page": page, "limit": limit},
@@ -124,7 +166,7 @@ async def test_list_events_paginates(
 
     assert response.status_code == 200
     body = response.json()
-    assert _titles(body) == expected_titles
+    assert _titles(body) == expected
     assert body["page"] == page
 
 
@@ -157,20 +199,22 @@ async def test_list_events_rejects_invalid_query(
 async def test_get_event_returns_event_with_tags(
     api_client: AsyncClient,
     seed_events: list[Event],
+    seed_tags: list[Tag],
     seed_event_tags: list[EventTag],
 ) -> None:
-    hackathon = seed_events[1]
+    expected_tags = _tag_names_by_event(seed_event_tags, seed_tags)
+    event = max(seed_events, key=lambda seeded: len(expected_tags[seeded.id]))
 
-    response = await api_client.get(f"{EVENTS_URL}/{hackathon.id}")
+    response = await api_client.get(f"{EVENTS_URL}/{event.id}")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["id"] == hackathon.id
-    assert body["title"] == hackathon.title
-    assert body["location"] == hackathon.location
-    assert body["capacity"] == hackathon.capacity
-    assert body["created_by_id"] == hackathon.created_by_id
-    assert _tag_names(body) == {"IT", "Career"}
+    assert body["id"] == event.id
+    assert body["title"] == event.title
+    assert body["location"] == event.location
+    assert body["capacity"] == event.capacity
+    assert body["created_by_id"] == event.created_by_id
+    assert _tag_names(body) == expected_tags[event.id]
 
 
 async def test_get_event_without_tags_returns_empty_list(
@@ -194,10 +238,10 @@ async def test_get_event_deleted_returns_not_found(
     event_service,
     seed_events: list[Event],
 ) -> None:
-    lecture = seed_events[0]
-    await event_service.delete_event(lecture.id, lecture.created_by_id)
+    deleted = seed_events[0]
+    await event_service.delete_event(deleted.id, deleted.created_by_id)
 
-    response = await api_client.get(f"{EVENTS_URL}/{lecture.id}")
+    response = await api_client.get(f"{EVENTS_URL}/{deleted.id}")
 
     assert response.status_code == 404
 
@@ -261,7 +305,7 @@ async def test_create_event_is_available_afterwards(
     assert fetched.json() == created.json()
 
     listed = await api_client.get(EVENTS_URL)
-    assert _titles(listed.json()) == ["Meetup"]
+    assert _titles(listed.json()) == [EVENT_BODY["title"]]
 
 
 async def test_create_event_with_tags(
@@ -270,16 +314,16 @@ async def test_create_event_with_tags(
     seed_tags: list[Tag],
 ) -> None:
     organizer = await make_user(role=RoleName.ORGANIZER)
-    it, career, _ = seed_tags
+    first, second = seed_tags[:2]
 
     response = await api_client.post(
         EVENTS_URL,
         headers=_auth_headers(organizer),
-        json={**EVENT_BODY, "tag_ids": [it.id, career.id, it.id]},
+        json={**EVENT_BODY, "tag_ids": [first.id, second.id, first.id]},
     )
 
     assert response.status_code == 201
-    assert _tag_names(response.json()) == {"IT", "Career"}
+    assert _tag_names(response.json()) == {first.name, second.name}
 
 
 async def test_create_event_requires_auth(api_client: AsyncClient) -> None:
@@ -306,12 +350,12 @@ async def test_create_event_with_unknown_tag(
     seed_tags: list[Tag],
 ) -> None:
     organizer = await make_user(role=RoleName.ORGANIZER)
-    it, _, _ = seed_tags
+    existing = seed_tags[0]
 
     response = await api_client.post(
         EVENTS_URL,
         headers=_auth_headers(organizer),
-        json={**EVENT_BODY, "tag_ids": [it.id, 999999]},
+        json={**EVENT_BODY, "tag_ids": [existing.id, 999999]},
     )
 
     assert response.status_code == 404

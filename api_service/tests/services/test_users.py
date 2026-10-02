@@ -9,21 +9,22 @@ from src.schemas.users import CreateUserSchema
 PASSWORD_HASH = hash_password("TestPassword123!")
 
 async def test_create_user(user_service: UserService):
-    user = await user_service.create_user(
-        CreateUserSchema(
+    data = CreateUserSchema(
         email="user@example.com",
         first_name="Test",
         second_name="User",
         password_hash=PASSWORD_HASH,
-    ))
+    )
+
+    user = await user_service.create_user(data)
 
     assert user.id is not None
-    assert user.email == "user@example.com"
-    assert user.first_name == "Test"
-    assert user.second_name == "User"
-    assert user.full_name == "Test User"
-    assert user.role.name == RoleName.PARTICIPANT
-    assert user.password_hash == PASSWORD_HASH
+    assert user.email == data.email
+    assert user.first_name == data.first_name
+    assert user.second_name == data.second_name
+    assert user.full_name == f"{data.first_name} {data.second_name}"
+    assert user.role.name == data.role
+    assert user.password_hash == data.password_hash
 
 
 async def test_create_user_with_duplicate_email_raises_conflict(
@@ -62,7 +63,7 @@ async def test_get_user_returns_existing_user(
 
     assert fetched.id == created.id
     assert fetched.email == created.email
-    assert fetched.full_name == "Test User"
+    assert fetched.full_name == created.full_name
 
 
 async def test_get_user_raises_not_found_for_missing_user(
@@ -83,15 +84,18 @@ async def test_update_user(
         password_hash=PASSWORD_HASH,
     ))
 
+    new_first_name = "New"
+    new_second_name = "Surname"
+
     updated = await user_service.update_user(
         user.id,
-        first_name="New",
-        second_name="Name",
+        first_name=new_first_name,
+        second_name=new_second_name,
     )
 
-    assert updated.first_name == "New"
-    assert updated.second_name == "Name"
-    assert updated.full_name == "New Name"
+    assert updated.first_name == new_first_name
+    assert updated.second_name == new_second_name
+    assert updated.full_name == f"{new_first_name} {new_second_name}"
 
 
 async def test_delete_user(

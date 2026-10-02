@@ -1,17 +1,18 @@
 from datetime import UTC, datetime
 
-import pytest
-
 from src.core.uow import UnitOfWork
+from src.models.event_tags import EventTag
 from src.models.events import Event
 from src.models.tags import Tag
 
 
 async def test_add_persists_event_and_assigns_id(make_event):
-    event = await make_event(title="Hackathon")
+    title = "Hackathon"
+
+    event = await make_event(title=title)
 
     assert event.id is not None
-    assert event.title == "Hackathon"
+    assert event.title == title
 
 
 async def test_get_by_id_returns_added_event(uow: UnitOfWork, make_event):
@@ -44,7 +45,7 @@ async def test_get_by_id_with_tags_loads_relationship(uow: UnitOfWork, make_even
 
     assert fetched is not None
     tag_names = {event_tag.tag.name for event_tag in fetched.event_tags}
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_get_by_id_for_update_returns_event(uow: UnitOfWork, make_event):
@@ -98,7 +99,7 @@ async def test_list_filtered_loads_tags(uow: UnitOfWork, make_event, make_tag):
     events = await uow.events.list_filtered()
 
     tag_names = {event_tag.tag.name for event_tag in events[0].event_tags}
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_list_by_organizer_loads_tags(uow: UnitOfWork, make_event, make_tag):
@@ -109,7 +110,7 @@ async def test_list_by_organizer_loads_tags(uow: UnitOfWork, make_event, make_ta
     events = await uow.events.list_by_organizer(event.created_by_id)
 
     tag_names = {event_tag.tag.name for event_tag in events[0].event_tags}
-    assert tag_names == {"IT"}
+    assert tag_names == {tag.name}
 
 
 async def test_list_by_organizer_returns_only_their_events(
@@ -125,41 +126,30 @@ async def test_list_by_organizer_returns_only_their_events(
     assert titles == {own_event.title}
 
 
-@pytest.mark.parametrize(
-    "tag_index,expected_titles",
-    [
-        pytest.param(0, {"Lecture", "Hackathon"}),  # IT
-        pytest.param(1, {"Hackathon"}),  # Career
-        pytest.param(2, {"Workshop"}),  # Sport
-    ],
-)
 async def test_list_filtered_by_tag_returns_expected_events(
     uow: UnitOfWork,
     seed_events: list[Event],
     seed_tags: list[Tag],
-    seed_event_tags,
-    tag_index: int,
-    expected_titles: set[str],
+    seed_event_tags: list[EventTag],
 ):
-    tag = seed_tags[tag_index]
+    for tag in seed_tags:
+        expected_ids = {
+            event_tag.event_id
+            for event_tag in seed_event_tags
+            if event_tag.tag_id == tag.id
+        }
 
-    events = await uow.events.list_filtered(tag_ids=[tag.id])
+        events = await uow.events.list_filtered(tag_ids=[tag.id])
 
-    assert {event.title for event in events} == expected_titles
+        assert {event.id for event in events} == expected_ids, tag.name
 
 
-@pytest.mark.parametrize(
-    "event_index",
-    [0, 1, 2],
-)
 async def test_get_by_id_returns_each_seeded_event(
     uow: UnitOfWork,
     seed_events: list[Event],
-    event_index: int,
 ):
-    expected = seed_events[event_index]
+    for expected in seed_events:
+        fetched = await uow.events.get_by_id(expected.id)
 
-    fetched = await uow.events.get_by_id(expected.id)
-
-    assert fetched is not None
-    assert fetched.title == expected.title
+        assert fetched is not None
+        assert fetched.title == expected.title

@@ -28,7 +28,7 @@ async def test_register_creates_participant_with_hashed_password(
     user = await service.register(data)
 
     assert user.id is not None
-    assert user.email == "participant@example.com"
+    assert user.email == data.email
     assert user.role.name == RoleName.PARTICIPANT
     assert user.password_hash != data.password
     assert verify_password(
