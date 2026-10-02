@@ -135,3 +135,23 @@ async def set_event_tags(
         ) from error
 
     return _to_event_response(event)
+
+
+@router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_event(
+    event_id: int,
+    service: EventServiceDep,
+    user_id: CurrentUserIdDep,
+) -> None:
+    try:
+        await service.delete_event(event_id, user_id)
+    except NotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ForbiddenError as error:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(error),
+        ) from error
