@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -993,5 +994,150 @@ async def test_delete_event_rejects_non_int_id(
     organizer: User,
 ) -> None:
     response = await api_client.delete(f"{EVENTS_URL}/abc", headers=_auth_headers(organizer))
+
+    assert response.status_code == 422
+
+
+# GET /events/organizer/my
+
+MY_EVENTS_URL = f"{EVENTS_URL}/organizer/my"
+
+
+async def test_list_my_events_returns_only_own_events_ordered_by_date(
+    api_client: AsyncClient,
+    make_event,
+    organizer: User,
+) -> None:
+    own_events = [
+        await make_event(created_by_id=organizer.id, event_date=datetime(2026, month, 1, tzinfo=UTC))
+        for month in (3, 1, 2)
+    ]
+    await make_event()  # событие другого организатора
+
+    response = await api_client.get(MY_EVENTS_URL, headers=_auth_headers(organizer))
+
+    assert response.status_code == 200
+    assert [event["id"] for event in response.json()["items"]] == [
+        event.id for event in sorted(own_events, key=lambda event: event.event_date)
+    ]
+
+
+async def test_list_my_events_returns_tags(
+    api_client: AsyncClient,
+    event_service,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    await event_service.set_event_tags(own_event.id, organizer.id, [tag.id for tag in seed_tags])
+    await event_service.uow.commit()
+
+    response = await api_client.get(MY_EVENTS_URL, headers=_auth_headers(organizer))
+
+    assert response.status_code == 200
+    (event,) = response.json()["items"]
+    assert _tag_names(event) == {tag.name for tag in seed_tags}
+
+
+async def test_list_my_events_hides_deleted_events(
+    api_client: AsyncClient,
+    event_service,
+    make_event,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    remaining = await make_event(created_by_id=organizer.id)
+    await event_service.delete_event(own_event.id, organizer.id)
+    await event_service.uow.commit()
+
+    response = await api_client.get(MY_EVENTS_URL, headers=_auth_headers(organizer))
+
+    assert response.status_code == 200
+    assert [event["id"] for event in response.json()["items"]] == [remaining.id]
+
+
+async def test_list_my_events_returns_empty_list(
+    api_client: AsyncClient,
+    organizer: User,
+) -> None:
+    response = await api_client.get(MY_EVENTS_URL, headers=_auth_headers(organizer))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == []
+    assert body["page"] == PaginationParams().page
+
+
+@pytest.mark.parametrize(
+    "page,limit",
+    [
+        pytest.param(1, 1, id="first-page"),
+        pytest.param(2, 1, id="second-page"),
+        pytest.param(2, 2, id="second-page-bigger-limit"),
+        pytest.param(100, 20, id="past-the-end"),
+    ],
+)
+async def test_list_my_events_paginates(
+    api_client: AsyncClient,
+    make_event,
+    organizer: User,
+    page: int,
+    limit: int,
+) -> None:
+    own_events = [
+        await make_event(created_by_id=organizer.id, event_date=datetime(2026, month, 1, tzinfo=UTC))
+        for month in (1, 2, 3)
+    ]
+    offset = PaginationParams(page=page, limit=limit).offset
+    expected_ids = [event.id for event in own_events][offset:offset + limit]
+
+    response = await api_client.get(
+        MY_EVENTS_URL,
+        headers=_auth_headers(organizer),
+        params={"page": page, "limit": limit},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [event["id"] for event in body["items"]] == expected_ids
+    assert body["page"] == page
+
+
+async def test_list_my_events_ignores_catalog_filters(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    # Фильтры каталога здесь не поддерживаются и должны игнорироваться, а не ронять запрос
+    response = await api_client.get(
+        MY_EVENTS_URL,
+        headers=_auth_headers(organizer),
+        params={"date_from": "2000-01-01T00:00:00Z", "tag_ids": [1]},
+    )
+
+    assert response.status_code == 200
+    assert [event["id"] for event in response.json()["items"]] == [own_event.id]
+
+
+async def test_list_my_events_requires_auth(api_client: AsyncClient) -> None:
+    response = await api_client.get(MY_EVENTS_URL)
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param({"limit": 0}, id="limit-zero"),
+        pytest.param({"limit": 101}, id="limit-too-big"),
+        pytest.param({"page": 0}, id="page-zero"),
+    ],
+)
+async def test_list_my_events_rejects_invalid_pagination(
+    api_client: AsyncClient,
+    organizer: User,
+    params: dict,
+) -> None:
+    response = await api_client.get(MY_EVENTS_URL, headers=_auth_headers(organizer), params=params)
 
     assert response.status_code == 422

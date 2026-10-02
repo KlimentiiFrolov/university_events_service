@@ -13,6 +13,7 @@ from src.schemas.events import (
     UpdateEventSchema,
 )
 from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
+from src.schemas.pagination import PaginationParams
 from src.schemas.tags import TagResponse
 
 router = APIRouter(
@@ -38,13 +39,31 @@ def _to_event_response(event: Event) -> EventResponse:
         ],
     )
 
+@router.get("/organizer/my", response_model=EventListResponse)
+async def list_organizer_events(
+    service: EventServiceDep,
+    filters: Annotated[PaginationParams, Query()],
+    organizer_id: CurrentUserIdDep
+) -> EventListResponse:
+    events = await service.list_organizer_events(
+        organizer_id, 
+        **filters.model_dump(exclude_none=True)
+    )
+
+    return EventListResponse(
+        page=filters.page,
+        total=5,
+        items=[_to_event_response(event) for event in events]
+    )
+
+
 
 @router.get("", response_model=EventListResponse)
 async def list_events(
     service: EventServiceDep,
     filters: Annotated[EventFilterParams, Query()],
 ) -> EventListResponse:
-    events = await service.list_events(**filters.model_dump())
+    events = await service.list_events(**filters.model_dump(exclude_none=True))
 
     return EventListResponse(
         page=filters.page,
