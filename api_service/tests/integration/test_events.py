@@ -132,6 +132,7 @@ async def test_list_events_hides_deleted_events(
 ) -> None:
     deleted = seed_events[0]
     await event_service.delete_event(deleted.id, deleted.created_by_id)
+    await event_service.uow.commit()
 
     response = await api_client.get(EVENTS_URL)
 
@@ -240,6 +241,7 @@ async def test_get_event_deleted_returns_not_found(
 ) -> None:
     deleted = seed_events[0]
     await event_service.delete_event(deleted.id, deleted.created_by_id)
+    await event_service.uow.commit()
 
     response = await api_client.get(f"{EVENTS_URL}/{deleted.id}")
 
@@ -469,6 +471,7 @@ async def test_update_event_keeps_tags(
     seed_tags: list[Tag],
 ) -> None:
     await event_service.set_event_tags(own_event.id, organizer.id, [tag.id for tag in seed_tags])
+    await event_service.uow.commit()
 
     response = await api_client.patch(
         f"{EVENTS_URL}/{own_event.id}",
@@ -566,6 +569,7 @@ async def test_update_event_deleted_returns_not_found(
     own_event: Event,
 ) -> None:
     await event_service.delete_event(own_event.id, organizer.id)
+    await event_service.uow.commit()
 
     response = await api_client.patch(
         f"{EVENTS_URL}/{own_event.id}",
@@ -585,6 +589,7 @@ async def test_update_event_capacity_below_active_registrations(
 ) -> None:
     participant = await make_user()
     await registration_service.register(participant.id, own_event.id)
+    await registration_service.uow.commit()
 
     response = await api_client.patch(
         f"{EVENTS_URL}/{own_event.id}",
@@ -617,6 +622,224 @@ async def test_update_event_rejects_invalid_body(
         f"{EVENTS_URL}/{own_event.id}",
         headers=_auth_headers(organizer),
         json=changes,
+    )
+
+    assert response.status_code == 422
+
+
+# PUT /events/{event_id}/tags
+
+
+def _tags_url(event_id: int) -> str:
+    return f"{EVENTS_URL}/{event_id}/tags"
+
+
+async def test_set_event_tags_replaces_full_set(
+    api_client: AsyncClient,
+    event_service,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    old_tag, *new_tags = seed_tags
+    await event_service.set_event_tags(own_event.id, organizer.id, [old_tag.id])
+    await event_service.uow.commit()
+
+    response = await api_client.put(
+        _tags_url(own_event.id),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": [tag.id for tag in new_tags]},
+    )
+
+    assert response.status_code == 200
+    assert _tag_names(response.json()) == {tag.name for tag in new_tags}
+
+
+async def test_set_event_tags_is_persisted(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    updated = await api_client.put(
+        _tags_url(own_event.id),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": [tag.id for tag in seed_tags]},
+    )
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{own_event.id}")
+
+    assert fetched.json() == updated.json()
+
+
+async def test_set_event_tags_removes_duplicates(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    tag = seed_tags[0]
+
+    response = await api_client.put(
+        _tags_url(own_event.id),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": [tag.id, tag.id]},
+    )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["tags"]] == [tag.id]
+
+
+async def test_set_event_tags_with_empty_list_clears_tags(
+    api_client: AsyncClient,
+    event_service,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    await event_service.set_event_tags(own_event.id, organizer.id, [tag.id for tag in seed_tags])
+    await event_service.uow.commit()
+
+    response = await api_client.put(
+        _tags_url(own_event.id),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": []},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["tags"] == []
+
+
+async def test_set_event_tags_keeps_other_fields(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    before = (await api_client.get(f"{EVENTS_URL}/{own_event.id}")).json()
+
+    response = await api_client.put(
+        _tags_url(own_event.id),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": [seed_tags[0].id]},
+    )
+
+    after = response.json()
+    assert {key: value for key, value in after.items() if key != "tags"} == {
+        key: value for key, value in before.items() if key != "tags"
+    }
+
+
+async def test_set_event_tags_requires_auth(
+    api_client: AsyncClient,
+    own_event: Event,
+) -> None:
+    response = await api_client.put(_tags_url(own_event.id), json={"tag_ids": []})
+
+    assert response.status_code == 401
+
+
+async def test_set_event_tags_by_not_owner(
+    api_client: AsyncClient,
+    event_service,
+    make_user,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    original_tag = seed_tags[0]
+    await event_service.set_event_tags(own_event.id, organizer.id, [original_tag.id])
+    await event_service.uow.commit()
+    other_organizer = await make_user(role=RoleName.ORGANIZER)
+    event_id, original_name = own_event.id, original_tag.name
+
+    response = await api_client.put(
+        _tags_url(event_id),
+        headers=_auth_headers(other_organizer),
+        json={"tag_ids": []},
+    )
+
+    assert response.status_code == 403
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{event_id}")
+    assert _tag_names(fetched.json()) == {original_name}
+
+
+async def test_set_event_tags_event_not_found(
+    api_client: AsyncClient,
+    organizer: User,
+) -> None:
+    response = await api_client.put(
+        _tags_url(999999),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": []},
+    )
+
+    assert response.status_code == 404
+
+
+async def test_set_event_tags_deleted_event_returns_not_found(
+    api_client: AsyncClient,
+    event_service,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    await event_service.delete_event(own_event.id, organizer.id)
+    await event_service.uow.commit()
+
+    response = await api_client.put(
+        _tags_url(own_event.id),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": []},
+    )
+
+    assert response.status_code == 404
+
+
+async def test_set_event_tags_with_unknown_tag_keeps_current_tags(
+    api_client: AsyncClient,
+    event_service,
+    organizer: User,
+    own_event: Event,
+    seed_tags: list[Tag],
+) -> None:
+    original_tag = seed_tags[0]
+    await event_service.set_event_tags(own_event.id, organizer.id, [original_tag.id])
+    await event_service.uow.commit()
+    event_id, original_name = own_event.id, original_tag.name
+
+    response = await api_client.put(
+        _tags_url(event_id),
+        headers=_auth_headers(organizer),
+        json={"tag_ids": [original_tag.id, 999999]},
+    )
+
+    assert response.status_code == 404
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{event_id}")
+    assert _tag_names(fetched.json()) == {original_name}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param({}, id="missing-tag-ids"),
+        pytest.param({"tag_ids": None}, id="null-tag-ids"),
+        pytest.param({"tag_ids": "1"}, id="tag-ids-not-a-list"),
+        pytest.param({"tag_ids": [0]}, id="non-positive-tag-id"),
+        pytest.param({"tag_ids": ["abc"]}, id="non-int-tag-id"),
+    ],
+)
+async def test_set_event_tags_rejects_invalid_body(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+    body: dict,
+) -> None:
+    response = await api_client.put(
+        _tags_url(own_event.id),
+        headers=_auth_headers(organizer),
+        json=body,
     )
 
     assert response.status_code == 422
