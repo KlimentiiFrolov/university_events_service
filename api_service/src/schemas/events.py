@@ -83,6 +83,6 @@ class EventResponse(BaseModel):
 
 class EventListResponse(BaseModel):
     page: int
-    total: int
+    per_page: int
     items: list[EventResponse]
 

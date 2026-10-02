@@ -24,6 +24,12 @@ class TagRepository(BaseRepository[Tag]):
         )
         return list(result.all())
 
+    async def list_ordered_by_name(self) -> list[Tag]:
+        result = await self.session.scalars(
+            select(Tag).order_by(Tag.name, Tag.id)
+        )
+        return list(result.all())
+
     async def list_by_ids(self, ids: list[int]) -> list[Tag]:
         result = await self.session.scalars(
             select(Tag).where(Tag.id.in_(ids))

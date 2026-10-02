@@ -24,6 +24,7 @@ from src.models.tags import Tag
 from src.models.users import User
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
+from src.services.tags import TagService
 from src.services.users import UserService
 
 log.handlers.clear()
@@ -116,6 +117,11 @@ def registration_service(uow: UnitOfWork) -> RegistrationService:
 @pytest.fixture()
 def event_service(uow: UnitOfWork) -> EventService:
     return EventService(uow=uow)
+
+
+@pytest.fixture()
+def tag_service(uow: UnitOfWork) -> TagService:
+    return TagService(uow=uow)
 
 
 @pytest.fixture()

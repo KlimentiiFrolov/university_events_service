@@ -13,6 +13,7 @@ from src.schemas.exceptions.domain import InvalidTokenError, NotFoundError
 from src.services.auth import AuthService
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
+from src.services.tags import TagService
 from src.services.users import UserService
 
 UoWDep = Annotated[UnitOfWork, Depends(get_uow)]
@@ -34,7 +35,12 @@ def get_user_service(uow: UoWDep) -> UserService:
     return UserService(uow=uow)
 
 
+def get_tag_service(uow: UoWDep) -> TagService:
+    return TagService(uow=uow)
+
+
 EventServiceDep = Annotated[EventService, Depends(get_event_service)]
+TagServiceDep = Annotated[TagService, Depends(get_tag_service)]
 RegistrationServiceDep = Annotated[RegistrationService, Depends(get_registration_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service),]
