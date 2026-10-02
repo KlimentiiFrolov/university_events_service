@@ -1,7 +1,14 @@
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from src.schemas.pagination import PaginationParams
 from src.schemas.tags import TagResponse
@@ -30,6 +37,15 @@ class UpdateEventSchema(BaseModel):
     location: str | None = Field(default=None, min_length=1, max_length=200)
     event_date: datetime | None = None
     capacity: int | None = Field(default=None, ge=0)
+
+    @field_validator("title", "location", "event_date", "capacity")
+    @classmethod
+    def reject_null(cls, value: Any, info: ValidationInfo) -> Any:
+        # Валидатор не вызывается для значений по умолчанию, только для переданных явно
+        if value is None:
+            raise ValueError(f"{info.field_name} cannot be null")
+
+        return value
 
 
 class SetEventTagsSchema(BaseModel):
