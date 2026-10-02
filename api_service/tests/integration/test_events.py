@@ -3,9 +3,12 @@ from collections.abc import Iterable
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.models.event_tags import EventTag
 from src.models.events import Event
+from src.models.registrations import Registration, RegistrationStatus
 from src.models.roles import RoleName
 from src.models.tags import Tag
 from src.models.users import User
@@ -841,5 +844,154 @@ async def test_set_event_tags_rejects_invalid_body(
         headers=_auth_headers(organizer),
         json=body,
     )
+
+    assert response.status_code == 422
+
+
+# DELETE /events/{event_id}
+
+
+async def _registration_statuses(
+    session_maker: async_sessionmaker[AsyncSession],
+    event_id: int,
+) -> dict[int, RegistrationStatus]:
+    """Статусы регистраций на событие, прочитанные новой сессией прямо из БД."""
+    async with session_maker() as session:
+        rows = await session.execute(
+            select(Registration.user_id, Registration.status)
+            .where(Registration.event_id == event_id)
+        )
+        return dict(rows.tuples().all())
+
+
+async def test_delete_event_returns_no_content(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    response = await api_client.delete(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+
+async def test_delete_event_hides_event(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    await api_client.delete(f"{EVENTS_URL}/{own_event.id}", headers=_auth_headers(organizer))
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{own_event.id}")
+    assert fetched.status_code == 404
+
+    listed = await api_client.get(EVENTS_URL)
+    assert own_event.id not in {event["id"] for event in listed.json()["items"]}
+
+
+async def test_delete_event_keeps_other_events(
+    api_client: AsyncClient,
+    make_event,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    other_event = await make_event(created_by_id=organizer.id)
+
+    await api_client.delete(f"{EVENTS_URL}/{own_event.id}", headers=_auth_headers(organizer))
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{other_event.id}")
+    assert fetched.status_code == 200
+
+
+async def test_delete_event_cancels_active_registrations(
+    api_client: AsyncClient,
+    registration_service,
+    session_maker: async_sessionmaker[AsyncSession],
+    make_user,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    active_participant = await make_user()
+    cancelled_participant = await make_user()
+    await registration_service.register(active_participant.id, own_event.id)
+    await registration_service.register(cancelled_participant.id, own_event.id)
+    await registration_service.cancel(cancelled_participant.id, own_event.id)
+    await registration_service.uow.commit()
+
+    response = await api_client.delete(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(organizer),
+    )
+
+    assert response.status_code == 204
+    assert await _registration_statuses(session_maker, own_event.id) == {
+        active_participant.id: RegistrationStatus.CANCELLED,
+        cancelled_participant.id: RegistrationStatus.CANCELLED,
+    }
+
+
+async def test_delete_event_requires_auth(
+    api_client: AsyncClient,
+    own_event: Event,
+) -> None:
+    response = await api_client.delete(f"{EVENTS_URL}/{own_event.id}")
+
+    assert response.status_code == 401
+
+
+async def test_delete_event_by_not_owner(
+    api_client: AsyncClient,
+    registration_service,
+    session_maker: async_sessionmaker[AsyncSession],
+    make_user,
+    own_event: Event,
+) -> None:
+    participant = await make_user()
+    await registration_service.register(participant.id, own_event.id)
+    await registration_service.uow.commit()
+    other_organizer = await make_user(role=RoleName.ORGANIZER)
+
+    response = await api_client.delete(
+        f"{EVENTS_URL}/{own_event.id}",
+        headers=_auth_headers(other_organizer),
+    )
+
+    assert response.status_code == 403
+
+    fetched = await api_client.get(f"{EVENTS_URL}/{own_event.id}")
+    assert fetched.status_code == 200
+    assert await _registration_statuses(session_maker, own_event.id) == {
+        participant.id: RegistrationStatus.ACTIVE,
+    }
+
+
+async def test_delete_event_not_found(
+    api_client: AsyncClient,
+    organizer: User,
+) -> None:
+    response = await api_client.delete(f"{EVENTS_URL}/999999", headers=_auth_headers(organizer))
+
+    assert response.status_code == 404
+
+
+async def test_delete_event_twice_returns_not_found(
+    api_client: AsyncClient,
+    organizer: User,
+    own_event: Event,
+) -> None:
+    url = f"{EVENTS_URL}/{own_event.id}"
+
+    assert (await api_client.delete(url, headers=_auth_headers(organizer))).status_code == 204
+    assert (await api_client.delete(url, headers=_auth_headers(organizer))).status_code == 404
+
+
+async def test_delete_event_rejects_non_int_id(
+    api_client: AsyncClient,
+    organizer: User,
+) -> None:
+    response = await api_client.delete(f"{EVENTS_URL}/abc", headers=_auth_headers(organizer))
 
     assert response.status_code == 422
