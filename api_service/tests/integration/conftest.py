@@ -3,34 +3,10 @@ from collections.abc import AsyncGenerator
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.api import main_router
 from src.core.uow import UnitOfWork, get_uow
-
-
-@pytest.fixture
-async def async_session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    connection = await engine.connect()
-    transaction = await connection.begin()
-
-    session = AsyncSession(
-        bind=connection,
-        expire_on_commit=False,
-        join_transaction_mode="create_savepoint",
-    )
-
-    try:
-        yield session
-    finally:
-        await session.close()
-        await transaction.rollback()
-        await connection.close()
-
-
-@pytest.fixture(autouse=True)
-def _roles_seeded(seed_roles: None) -> None:
-    """Роли создаются раньше остальных фикстур: seed_users и make_user ищут их в БД."""
 
 
 @pytest.fixture
@@ -41,15 +17,17 @@ def test_app() -> FastAPI:
 
 
 @pytest.fixture
-async def api_client(async_session, test_app):
+async def api_client(
+    session_maker: async_sessionmaker[AsyncSession],
+    test_app: FastAPI,
+) -> AsyncGenerator[AsyncClient, None]:
+    # Как в приложении: на каждый запрос своя сессия и своя транзакция с настоящим COMMIT,
+    # подменяется только БД — тестовая из контейнера
     async def _override_uow():
-        await async_session.commit()
-
-        async with UnitOfWork(session_factory=lambda: async_session) as uow:
+        async with UnitOfWork(session_factory=session_maker) as uow:
             yield uow
 
     test_app.dependency_overrides[get_uow] = _override_uow
-
 
     async with AsyncClient(
         transport=ASGITransport(app=test_app),
