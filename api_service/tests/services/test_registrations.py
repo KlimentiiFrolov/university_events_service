@@ -7,8 +7,10 @@ from src.schemas.exceptions.domain import (
     RegistrationAlreadyActiveError,
     RegistrationAlreadyCancelledError,
     RegistrationAlreadyExistsError,
+    ForbiddenError,
 )
 from src.services.registrations import RegistrationService
+from src.models.roles import RoleName
 
 
 async def test_register_creates_active_registration(
@@ -210,18 +212,60 @@ async def test_get_event_participants_returns_only_active_users(
     make_user,
     make_event,
 ):
+    organizer = await make_user(
+        role=RoleName.ORGANIZER
+    )
+
     first_user = await make_user()
     second_user = await make_user()
 
-    event = await make_event()
-
-    await registration_service.register(first_user.id, event.id)
-    await registration_service.register(second_user.id, event.id)
-
-    await registration_service.cancel(second_user.id, event.id)
-
-    participants = await registration_service.get_event_participants(
-        event.id
+    event = await make_event(
+        created_by_id=organizer.id
     )
 
-    assert {user.id for user in participants} == {first_user.id}
+    await registration_service.register(
+        first_user.id,
+        event.id,
+    )
+    await registration_service.register(
+        second_user.id,
+        event.id,
+    )
+
+    await registration_service.cancel(
+        second_user.id,
+        event.id,
+    )
+
+    participants = (
+        await registration_service
+        .get_event_participants(
+            event.id,
+            organizer.id,
+        )
+    )
+
+    assert {user.id for user in participants} == {first_user.id,}
+
+
+async def test_get_event_participants_for_other_organizer_raises_forbidden(
+    registration_service: RegistrationService,
+    make_user,
+    make_event,
+):
+    owner = await make_user(
+        role=RoleName.ORGANIZER
+    )
+    other_organizer = await make_user(
+        role=RoleName.ORGANIZER
+    )
+
+    event = await make_event(
+        created_by_id=owner.id
+    )
+
+    with pytest.raises(ForbiddenError):
+        await registration_service.get_event_participants(
+            event.id,
+            other_organizer.id,
+        )
