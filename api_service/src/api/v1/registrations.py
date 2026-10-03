@@ -42,14 +42,12 @@ async def get_my_registrations(
         participant.id
     )
 
-    items = [
-        _to_registration_response(registration)
-        for registration in registrations
-    ]
-
     return RegistrationListResponse(
-        total=len(items),
-        items=items,
+        total=len(registrations),
+        items=[
+            _to_registration_response(registration)
+            for registration in registrations
+        ],
     )
 
 
