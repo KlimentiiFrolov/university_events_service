@@ -16,6 +16,7 @@ from src.schemas.exceptions.domain import (
     RegistrationAlreadyExistsError,
 )
 
+
 class RegistrationService:
     def __init__(self, uow: UnitOfWork):
         self.uow = uow

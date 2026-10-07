@@ -18,12 +18,11 @@ from src.schemas.events import (
 )
 from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
 from src.schemas.pagination import PaginationParams
-from src.schemas.tags import TagResponse
-
 from src.schemas.registrations import (
     ParticipantListResponse,
     ParticipantResponse,
 )
+from src.schemas.tags import TagResponse
 
 router = APIRouter(
     prefix="/events",
