@@ -12,7 +12,7 @@ class NotFoundError(DomainError):
         self.identifier = identifier
 
         super().__init__(
-            f"{entity} with identifier={identifier} was not found"
+            f"{entity} with {identifier} was not found"
         )
 
 
