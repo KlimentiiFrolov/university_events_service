@@ -1,10 +1,10 @@
 {
   "info": {
-    "_postman_id": "29e7675a-7b12-4f99-a993-d7e5ef3ebcdd",
+    "_postman_id": "2e354542-06ed-4e2c-9d48-75367ba887b1",
     "name": "University Events API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "58682548",
-    "_collection_link": "https://go.postman.co/collection/58682548-29e7675a-7b12-4f99-a993-d7e5ef3ebcdd?source=collection_link"
+    "_exporter_id": "46357516",
+    "_collection_link": "https://go.postman.co/collection/46357516-2e354542-06ed-4e2c-9d48-75367ba887b1?source=collection_link"
   },
   "item": [
     {
@@ -16,21 +16,25 @@
             {
               "listen": "prerequest",
               "script": {
-                "type": "text/javascript",
                 "exec": [
                   "// Уникальный email, чтобы запрос можно было повторять",
                   "pm.collectionVariables.set('participantEmail', `participant-${Date.now()}@example.com`);"
-                ]
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
               }
             },
             {
               "listen": "test",
               "script": {
-                "type": "text/javascript",
                 "exec": [
                   "pm.test('201 Created', () => pm.response.to.have.status(201));",
                   "pm.test('role is participant', () => pm.expect(pm.response.json().role).to.eql('participant'));"
-                ]
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
               }
             }
           ],
@@ -44,7 +48,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{participantEmail}}\",\n  \"password\": \"{{participantPassword}}\",\n  \"first_name\": \"Ivan\",\n  \"second_name\": \"Ivanov\"\n}",
+              "raw": "{\n  \"email\": \"admin@admin.com\",\n  \"password\": \"admin123\",\n  \"first_name\": \"Admin\",\n  \"second_name\": \"Adminov\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -71,15 +75,27 @@
             {
               "listen": "test",
               "script": {
-                "type": "text/javascript",
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('participantToken', pm.response.json().access_token);"
-                ]
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
               }
             }
           ],
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
             "header": [
               {
@@ -89,7 +105,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{participantEmail}}\",\n  \"password\": \"{{participantPassword}}\"\n}",
+              "raw": "{\n  \"email\": \"gzazulya@gmail.com\",\n  \"password\": \"Craft123\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -570,7 +586,18 @@
           "name": "Get event participants",
           "request": {
             "method": "GET",
-            "header": []
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{eventId}}/participants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "{{eventId}}",
+                "participants"
+              ]
+            }
           },
           "response": []
         }
@@ -625,7 +652,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{participantToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/registrations/{{eventId}}",
               "host": [
@@ -675,7 +708,13 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{participantToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/registrations/my",
               "host": [
@@ -692,8 +731,24 @@
         {
           "name": "Cancel registration",
           "request": {
-            "method": "GET",
-            "header": []
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{participantToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{eventId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registrations",
+                "{{eventId}}"
+              ]
+            }
           },
           "response": []
         },
@@ -726,7 +781,13 @@
           ],
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{participantToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/registrations/{{eventId}}/reregister",
               "host": [
