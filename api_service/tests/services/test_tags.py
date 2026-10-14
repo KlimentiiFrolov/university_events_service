@@ -1,4 +1,5 @@
 from src.models.tags import Tag
+from src.schemas.tags import TagResponse
 from src.services.tags import TagService
 
 
@@ -8,7 +9,10 @@ async def test_list_tags_returns_all_tags_sorted_by_name(
 ):
     tags = await tag_service.list_tags()
 
-    assert [tag.name for tag in tags] == sorted(tag.name for tag in seed_tags)
+    assert tags == [
+        TagResponse(id=tag.id, name=tag.name)
+        for tag in sorted(seed_tags, key=lambda tag: tag.name)
+    ]
 
 
 async def test_list_tags_returns_empty_list_without_tags(tag_service: TagService):
