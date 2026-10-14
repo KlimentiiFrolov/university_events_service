@@ -1,16 +1,16 @@
 import pytest
 
 from src.models.registrations import RegistrationStatus
+from src.models.roles import RoleName
 from src.schemas.exceptions.domain import (
     EventCapacityExceededError,
+    ForbiddenError,
     NotFoundError,
     RegistrationAlreadyActiveError,
     RegistrationAlreadyCancelledError,
     RegistrationAlreadyExistsError,
-    ForbiddenError,
 )
 from src.services.registrations import RegistrationService
-from src.models.roles import RoleName
 
 
 async def test_register_creates_active_registration(

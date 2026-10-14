@@ -1,11 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.models.registrations import RegistrationStatus
 
 
 class RegistrationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     event_id: int
@@ -20,6 +22,8 @@ class RegistrationListResponse(BaseModel):
 
 
 class ParticipantResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     first_name: str

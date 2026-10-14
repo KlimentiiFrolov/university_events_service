@@ -15,6 +15,7 @@ from src.schemas.exceptions.domain import (
     RegistrationAlreadyCancelledError,
     RegistrationAlreadyExistsError,
 )
+from src.schemas.registrations import ParticipantResponse, RegistrationResponse
 
 
 class RegistrationService:
@@ -116,7 +117,7 @@ class RegistrationService:
         self,
         user_id: int,
         event_id: int,
-    ) -> Registration:
+    ) -> RegistrationResponse:
         await self._get_user(user_id)
         event = await self._get_event(event_id, for_update=True)
 
@@ -147,13 +148,13 @@ class RegistrationService:
         registration = await self.uow.registrations.add(registration)
 
         log.info("User id=%d registered on event id=%d", user_id, event_id)
-        return registration
+        return RegistrationResponse.model_validate(registration)
 
     async def cancel(
         self,
         user_id: int,
         event_id: int,
-    ) -> Registration:
+    ) -> RegistrationResponse:
         registration = await self._get_registration(user_id, event_id)
 
         if registration.status == RegistrationStatus.CANCELLED:
@@ -171,13 +172,13 @@ class RegistrationService:
         registration = await self.uow.registrations.update(registration)
 
         log.info("User id=%d cancelled registration on event id=%d", user_id, event_id)
-        return registration
+        return RegistrationResponse.model_validate(registration)
 
     async def reregister(
         self,
         user_id: int,
         event_id: int,
-    ) -> Registration:
+    ) -> RegistrationResponse:
         registration = await self._get_registration(user_id, event_id)
 
         if registration.status == RegistrationStatus.ACTIVE:
@@ -200,24 +201,27 @@ class RegistrationService:
         registration = await self.uow.registrations.update(registration)
 
         log.info("User id=%d re-registered on event id=%d", user_id, event_id)
-        return registration
+        return RegistrationResponse.model_validate(registration)
 
     async def get_my_registrations(
         self,
         user_id: int,
-    ) -> list[Registration]:
+    ) -> list[RegistrationResponse]:
         await self._get_user(user_id) # TODO: можно будет убрать эту проверку, после того, как сделаем слой представлений и добавим зависимость для авторизации пользователя
 
         registrations = await self.uow.registrations.get_by_user_id(user_id)
 
         log.debug("Listed %d registrations of user id=%d", len(registrations), user_id)
-        return registrations
+        return [
+            RegistrationResponse.model_validate(registration)
+            for registration in registrations
+        ]
 
     async def get_event_participants(
             self,
             event_id: int,
             organizer_id: int,
-    ) -> list[User]:
+    ) -> list[ParticipantResponse]:
         event = await self._get_event(event_id)
 
         self._ensure_event_owner(
@@ -237,4 +241,7 @@ class RegistrationService:
             event_id,
         )
 
-        return participants
+        return [
+            ParticipantResponse.model_validate(participant)
+            for participant in participants
+        ]

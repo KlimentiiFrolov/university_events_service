@@ -8,8 +8,8 @@ from src.core.logger import log
 from src.core.tokens import decode_access_token
 from src.core.uow import UnitOfWork, get_uow
 from src.models.roles import RoleName
-from src.models.users import User
 from src.schemas.exceptions.domain import InvalidTokenError, NotFoundError
+from src.schemas.users import UserResponse
 from src.services.auth import AuthService
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
@@ -63,7 +63,7 @@ def _unauthorized(detail: str) -> HTTPException:
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     user_service: UserServiceDep,
-) -> User:
+) -> UserResponse:
     if credentials is None:
         raise _unauthorized("Not authenticated")
 
@@ -78,20 +78,20 @@ async def get_current_user(
         raise _unauthorized("User not found") from error
 
 
-CurrentUserDep = Annotated[User, Depends(get_current_user)]
+CurrentUserDep = Annotated[UserResponse, Depends(get_current_user)]
 
 
-def require_roles(*roles: RoleName) -> Callable[..., Awaitable[User]]:
+def require_roles(*roles: RoleName) -> Callable[..., Awaitable[UserResponse]]:
     if not roles:
         raise ValueError("require_roles() needs at least one role")
 
     allowed = frozenset(roles)
 
-    async def _require_roles(user: CurrentUserDep) -> User:
-        if user.role.name not in allowed:
+    async def _require_roles(user: CurrentUserDep) -> UserResponse:
+        if user.role not in allowed:
             log.warning(
                 "User id=%d with role=%s has no access, required one of: %s",
-                user.id, user.role.name, ", ".join(sorted(allowed)),
+                user.id, user.role, ", ".join(sorted(allowed)),
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -103,6 +103,6 @@ def require_roles(*roles: RoleName) -> Callable[..., Awaitable[User]]:
     return _require_roles
 
 
-OrganizerDep = Annotated[User, Depends(require_roles(RoleName.ORGANIZER))]
-ParticipantDep = Annotated[User, Depends(require_roles(RoleName.PARTICIPANT))]
-AnyRoleDep = Annotated[User, Depends(require_roles(*RoleName))]
+OrganizerDep = Annotated[UserResponse, Depends(require_roles(RoleName.ORGANIZER))]
+ParticipantDep = Annotated[UserResponse, Depends(require_roles(RoleName.PARTICIPANT))]
+AnyRoleDep = Annotated[UserResponse, Depends(require_roles(*RoleName))]

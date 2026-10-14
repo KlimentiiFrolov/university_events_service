@@ -1,0 +1,58 @@
+name: CI api_service pipeline
+
+on:
+    pull_request:
+        paths:
+            - 'api_service/**'
+            - '.github/workflows/ci_api_service.yaml'
+    push:
+        branches:
+            - main
+        paths:
+            - 'api_service/**'
+            - '.github/workflows/ci_api_service.yaml'
+
+defaults:
+    run:
+        working-directory: api_service
+
+jobs:
+    lint:
+        name: Lint (ruff)
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: api_service/uv.lock
+
+            - name: Install dependencies
+              run: uv sync --locked
+
+            - name: Ruff check
+              run: uv run ruff check --output-format=github .
+
+    test:
+        name: Tests (pytest)
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: api_service/uv.lock
+
+            - name: Install dependencies
+              run: uv sync --locked
+
+            - name: Run tests
+              run: uv run pytest --cov=src tests

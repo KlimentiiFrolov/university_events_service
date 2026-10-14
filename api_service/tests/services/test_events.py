@@ -53,7 +53,7 @@ async def test_create_event_without_tags_succeeds(
 
     fetched = await event_service.get_event(event.id)
 
-    assert fetched.event_tags == []
+    assert fetched.tags == []
 
 
 async def test_create_event_with_tags_attaches_them(
@@ -76,7 +76,7 @@ async def test_create_event_with_tags_attaches_them(
     )
 
     fetched = await event_service.get_event(event.id)
-    tag_names = {event_tag.tag.name for event_tag in fetched.event_tags}
+    tag_names = {tag.name for tag in fetched.tags}
 
     assert tag_names == {tag.name}
 
@@ -100,7 +100,7 @@ async def test_create_event_returns_event_with_loaded_tags(
         ),
     )
 
-    tag_names = {event_tag.tag.name for event_tag in event.event_tags}
+    tag_names = {tag.name for tag in event.tags}
     assert tag_names == {tag.name}
 
 
@@ -138,7 +138,7 @@ async def test_create_event_missing_tag_raises_not_found(
         )
 
 
-async def test_get_event_returns_event_with_tags_by_default(
+async def test_get_event_returns_event_with_tags(
     event_service: EventService,
     make_event,
     make_tag,
@@ -148,7 +148,7 @@ async def test_get_event_returns_event_with_tags_by_default(
     await event_service.uow.event_tags.add_tags(event.id, [tag.id])
 
     fetched = await event_service.get_event(event.id)
-    tag_names = {event_tag.tag.name for event_tag in fetched.event_tags}
+    tag_names = {tag.name for tag in fetched.tags}
 
     assert tag_names == {tag.name}
 
@@ -299,7 +299,7 @@ async def test_update_event_returns_event_with_loaded_tags(
         UpdateEventSchema(title="New title"),
     )
 
-    tag_names = {event_tag.tag.name for event_tag in updated.event_tags}
+    tag_names = {tag.name for tag in updated.tags}
     assert tag_names == {tag.name}
 
 
@@ -383,7 +383,7 @@ async def test_set_event_tags_replaces_full_set(
         [new_tag.id],
     )
 
-    tag_names = {event_tag.tag.name for event_tag in updated.event_tags}
+    tag_names = {tag.name for tag in updated.tags}
     assert tag_names == {new_tag.name}
 
 
