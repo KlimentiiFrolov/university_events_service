@@ -437,7 +437,7 @@ async def main() -> None:
         )
 
         participant_names = [
-            user.full_name
+            f"{user.first_name} {user.second_name}"
             for user in participants
         ]
 
@@ -549,7 +549,7 @@ async def main() -> None:
         success(
             "После отмены активных участников: "
             + ", ".join(
-                user.full_name
+                f"{user.first_name} {user.second_name}"
                 for user
                 in participants_after_cancel
             )

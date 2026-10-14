@@ -17,10 +17,7 @@ from src.schemas.events import (
 )
 from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
 from src.schemas.pagination import PaginationParams
-from src.schemas.registrations import (
-    ParticipantListResponse,
-    ParticipantResponse,
-)
+from src.schemas.registrations import ParticipantListResponse
 
 router = APIRouter(
     prefix="/events",
@@ -187,17 +184,7 @@ async def get_event_participants(
             detail=str(error),
         ) from error
 
-    items = [
-        ParticipantResponse(
-            id=participant.id,
-            email=participant.email,
-            first_name=participant.first_name,
-            second_name=participant.second_name,
-        )
-        for participant in participants
-    ]
-
     return ParticipantListResponse(
-        total=len(items),
-        items=items,
+        total=len(participants),
+        items=participants,
     )

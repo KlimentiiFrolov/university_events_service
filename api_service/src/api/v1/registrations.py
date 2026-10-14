@@ -4,7 +4,6 @@ from dependencies import (
     ParticipantDep,
     RegistrationServiceDep,
 )
-from src.models.registrations import Registration
 from src.schemas.exceptions.domain import (
     ConflictError,
     NotFoundError,
@@ -20,19 +19,6 @@ router = APIRouter(
 )
 
 
-def _to_registration_response(
-    registration: Registration,
-) -> RegistrationResponse:
-    return RegistrationResponse(
-        id=registration.id,
-        user_id=registration.user_id,
-        event_id=registration.event_id,
-        status=registration.status,
-        registered_at=registration.registered_at,
-        cancelled_at=registration.cancelled_at,
-    )
-
-
 @router.get("/my", response_model=RegistrationListResponse,)
 async def get_my_registrations(
     service: RegistrationServiceDep,
@@ -44,10 +30,7 @@ async def get_my_registrations(
 
     return RegistrationListResponse(
         total=len(registrations),
-        items=[
-            _to_registration_response(registration)
-            for registration in registrations
-        ],
+        items=registrations,
     )
 
 
@@ -73,9 +56,7 @@ async def register_for_event(
             detail=str(error),
         ) from error
 
-    return _to_registration_response(
-        registration
-    )
+    return registration
 
 
 @router.delete("/{event_id}", response_model=RegistrationResponse,)
@@ -100,9 +81,7 @@ async def cancel_registration(
             detail=str(error),
         ) from error
 
-    return _to_registration_response(
-        registration
-    )
+    return registration
 
 
 @router.post("/{event_id}/reregister", response_model=RegistrationResponse,)
@@ -127,6 +106,4 @@ async def reregister_for_event(
             detail=str(error),
         ) from error
 
-    return _to_registration_response(
-        registration
-    )
+    return registration
