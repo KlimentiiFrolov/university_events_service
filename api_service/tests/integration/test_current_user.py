@@ -24,7 +24,7 @@ def test_app() -> FastAPI:
 
     @router.get(PROBE_URL)
     async def probe_me(user: CurrentUserDep) -> dict:
-        return {"id": user.id, "email": user.email, "role": user.role.name}
+        return {"id": user.id, "email": user.email, "role": user.role}
 
     app = FastAPI()
     app.include_router(router)

@@ -9,3 +9,11 @@ class CreateUserSchema(BaseModel):
     second_name: str = Field(min_length=1, max_length=127)
     password_hash: str = Field(min_length=1, max_length=255)
     role: RoleName = RoleName.PARTICIPANT
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    first_name: str
+    second_name: str
+    role: RoleName

@@ -5,8 +5,7 @@ from src.core.passwords import hash_password, verify_password
 from src.core.tokens import create_access_token
 from src.core.uow import UnitOfWork
 from src.models.roles import RoleName
-from src.models.users import User
-from src.schemas.auth import LoginRequest, RegisterRequest
+from src.schemas.auth import LoginRequest, RegisterRequest, RegisterResponse
 from src.schemas.exceptions.domain import InvalidCredentialsError
 from src.schemas.users import CreateUserSchema
 from src.services.users import UserService
@@ -20,7 +19,7 @@ class AuthService:
     async def register(
         self,
         data: RegisterRequest,
-    ) -> User:
+    ) -> RegisterResponse:
         password_hash = await asyncio.to_thread(
             hash_password,
             data.password,
@@ -41,7 +40,7 @@ class AuthService:
             user.id,
         )
 
-        return user
+        return RegisterResponse(**user.model_dump())
 
     async def login(
         self,

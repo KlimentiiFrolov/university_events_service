@@ -1,10 +1,9 @@
 import pytest
 
-from src.models.roles import RoleName
-from src.schemas.exceptions.domain import ConflictError, NotFoundError
-from src.services.users import UserService
 from src.core.passwords import hash_password
+from src.schemas.exceptions.domain import ConflictError, NotFoundError
 from src.schemas.users import CreateUserSchema
+from src.services.users import UserService
 
 PASSWORD_HASH = hash_password("TestPassword123!")
 
@@ -22,9 +21,11 @@ async def test_create_user(user_service: UserService):
     assert user.email == data.email
     assert user.first_name == data.first_name
     assert user.second_name == data.second_name
-    assert user.full_name == f"{data.first_name} {data.second_name}"
-    assert user.role.name == data.role
-    assert user.password_hash == data.password_hash
+    assert user.role == data.role
+
+    persisted = await user_service.uow.users.get_by_id(user.id)
+    assert persisted is not None
+    assert persisted.password_hash == data.password_hash
 
 
 async def test_create_user_with_duplicate_email_raises_conflict(
@@ -61,9 +62,7 @@ async def test_get_user_returns_existing_user(
 
     fetched = await user_service.get_user(created.id)
 
-    assert fetched.id == created.id
-    assert fetched.email == created.email
-    assert fetched.full_name == created.full_name
+    assert fetched == created
 
 
 async def test_get_user_raises_not_found_for_missing_user(
@@ -95,7 +94,6 @@ async def test_update_user(
 
     assert updated.first_name == new_first_name
     assert updated.second_name == new_second_name
-    assert updated.full_name == f"{new_first_name} {new_second_name}"
 
 
 async def test_delete_user(
