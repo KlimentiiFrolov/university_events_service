@@ -4,8 +4,26 @@ from src.core.dates import get_current_datetime
 from src.core.logger import log
 from src.core.uow import UnitOfWork
 from src.models.events import Event
-from src.schemas.events import CreateEventSchema, UpdateEventSchema
+from src.schemas.events import CreateEventSchema, EventResponse, UpdateEventSchema
 from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
+from src.schemas.tags import TagResponse
+
+
+def _to_event_response(event: Event) -> EventResponse:
+    return EventResponse(
+        id=event.id,
+        title=event.title,
+        text=event.text,
+        location=event.location,
+        event_date=event.event_date,
+        capacity=event.capacity,
+        created_by_id=event.created_by_id,
+        created_at=event.created_at,
+        tags=[
+            TagResponse.model_validate(event_tag.tag)
+            for event_tag in event.event_tags
+        ],
+    )
 
 
 class EventService:
@@ -66,7 +84,7 @@ class EventService:
         self,
         organizer_id: int,
         data: CreateEventSchema,
-    ) -> Event:
+    ) -> EventResponse:
         organizer = await self.uow.users.get_by_id(organizer_id)
 
         if organizer is None:
@@ -89,15 +107,15 @@ class EventService:
             "Event id=%d created by user id=%d with tags %s",
             event.id, organizer_id, tuple(tag_ids),
         )
-        return await self._get_event(event.id, with_tags=True)
+        return _to_event_response(await self._get_event(event.id, with_tags=True))
 
     async def get_event(
         self,
         event_id: int,
         *,
         with_tags: bool = True,
-    ) -> Event:
-        return await self._get_event(event_id, with_tags=with_tags)
+    ) -> EventResponse:
+        return _to_event_response(await self._get_event(event_id, with_tags=with_tags))
 
     async def list_events(
         self,
@@ -107,7 +125,7 @@ class EventService:
         tag_ids: list[int] | None = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> list[Event]:
+    ) -> list[EventResponse]:
         events = await self.uow.events.list_filtered(
             date_from=date_from,
             date_to=date_to,
@@ -120,7 +138,7 @@ class EventService:
             "Listed %d events (date_from=%s, date_to=%s, tag_ids=%s, limit=%d, offset=%d)",
             len(events), date_from, date_to, tag_ids, limit, offset,
         )
-        return events
+        return [_to_event_response(event) for event in events]
 
     async def list_organizer_events(
         self,
@@ -128,7 +146,7 @@ class EventService:
         *,
         limit: int = 20,
         offset: int = 0,
-    ) -> list[Event]:
+    ) -> list[EventResponse]:
         events = await self.uow.events.list_by_organizer(
             organizer_id,
             limit=limit,
@@ -139,14 +157,14 @@ class EventService:
             "Listed %d events of organizer id=%d (limit=%d, offset=%d)",
             len(events), organizer_id, limit, offset,
         )
-        return events
+        return [_to_event_response(event) for event in events]
 
     async def update_event(
         self,
         event_id: int,
         organizer_id: int,
         data: UpdateEventSchema,
-    ) -> Event:
+    ) -> EventResponse:
         event = await self._get_event(event_id)
         self._ensure_owner(event, organizer_id)
 
@@ -164,14 +182,14 @@ class EventService:
             "Event id=%d updated by user id=%d, fields: %s",
             event_id, organizer_id, tuple(updates),
         )
-        return await self._get_event(event_id, with_tags=True)
+        return _to_event_response(await self._get_event(event_id, with_tags=True))
 
     async def set_event_tags(
         self,
         event_id: int,
         organizer_id: int,
         tag_ids: list[int],
-    ) -> Event:
+    ) -> EventResponse:
         event = await self._get_event(event_id)
         self._ensure_owner(event, organizer_id)
 
@@ -184,7 +202,7 @@ class EventService:
             "Event id=%d tags replaced by user id=%d with %s",
             event_id, organizer_id, tuple(tag_ids),
         )
-        return await self._get_event(event_id, with_tags=True)
+        return _to_event_response(await self._get_event(event_id, with_tags=True))
 
     async def delete_event(
         self,

@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from src.core.passwords import hash_password
 from src.core.uow import UnitOfWork
 from src.models.roles import RoleName
 from src.models.tags import Tag
@@ -11,11 +12,10 @@ from src.schemas.exceptions.domain import (
     NotFoundError,
     RegistrationAlreadyExistsError,
 )
+from src.schemas.users import CreateUserSchema
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
 from src.services.users import UserService
-from src.core.passwords import hash_password
-from src.schemas.users import CreateUserSchema
 
 # ЛОГИ
 
@@ -262,9 +262,9 @@ async def main() -> None:
         )
 
         tag_names = [
-            event_tag.tag.name
-            for event_tag
-            in event_with_tags.event_tags
+            tag.name
+            for tag
+            in event_with_tags.tags
         ]
 
         success(
@@ -369,9 +369,9 @@ async def main() -> None:
         )
 
         new_tag_names = {
-            event_tag.tag.name
-            for event_tag
-            in event_with_new_tags.event_tags
+            tag.name
+            for tag
+            in event_with_new_tags.tags
         }
 
         assert new_tag_names == {
@@ -431,7 +431,8 @@ async def main() -> None:
         participants = (
             await registration_service
             .get_event_participants(
-                event.id
+                event.id,
+                organizer.id
             )
         )
 
@@ -536,7 +537,8 @@ async def main() -> None:
         participants_after_cancel = (
             await registration_service
             .get_event_participants(
-                event.id
+                event.id,
+                organizer.id
             )
         )
 
@@ -580,7 +582,8 @@ async def main() -> None:
         participants_after_reregister = (
             await registration_service
             .get_event_participants(
-                event.id
+                event.id,
+                organizer.id
             )
         )
 
