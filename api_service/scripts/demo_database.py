@@ -108,26 +108,26 @@ async def main() -> None:
         success(
             f"Создан организатор: "
             f"id={organizer.id}, "
-            f"name={organizer.full_name}, "
-            f"role={organizer.role.name}"
+            f"name={organizer.first_name} {organizer.second_name}, "
+            f"role={organizer.role}"
         )
 
         success(
             f"Создан участник: "
             f"id={participant.id}, "
-            f"name={participant.full_name}"
+            f"name={participant.first_name} {participant.second_name}"
         )
 
         success(
             f"Создан участник: "
             f"id={second_participant.id}, "
-            f"name={second_participant.full_name}"
+            f"name={second_participant.first_name} {second_participant.second_name}"
         )
 
         success(
             f"Создан участник: "
             f"id={third_participant.id}, "
-            f"name={third_participant.full_name}"
+            f"name={third_participant.first_name} {third_participant.second_name}"
         )
 
 
@@ -142,7 +142,7 @@ async def main() -> None:
         success(
             f"Получен пользователь из БД: "
             f"id={fetched_user.id}, "
-            f"name={fetched_user.full_name}"
+            f"name={fetched_user.first_name} {fetched_user.second_name}"
         )
 
 
@@ -157,7 +157,7 @@ async def main() -> None:
 
         success(
             f"Пользователь обновлён: "
-            f"{updated_user.full_name}"
+            f"{updated_user.first_name} {updated_user.second_name}"
         )
 
         # ЭТАП 3

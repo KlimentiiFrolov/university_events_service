@@ -29,11 +29,15 @@ async def test_register_creates_participant_with_hashed_password(
 
     assert user.id is not None
     assert user.email == data.email
-    assert user.role.name == RoleName.PARTICIPANT
-    assert user.password_hash != data.password
+    assert user.role == RoleName.PARTICIPANT
+
+    persisted = await uow.users.get_by_id(user.id)
+
+    assert persisted is not None
+    assert persisted.password_hash != data.password
     assert verify_password(
         data.password,
-        user.password_hash,
+        persisted.password_hash,
     )
 
 

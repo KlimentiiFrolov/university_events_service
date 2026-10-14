@@ -63,7 +63,7 @@ def test_decode_rejects_unsigned_token():
 
 
 def test_decode_rejects_tampered_payload():
-    header, payload, signature = create_access_token(USER_ID).split(".")
+    header, _payload, signature = create_access_token(USER_ID).split(".")
     forged_payload = _encode(sub="1").split(".")[1]
 
     with pytest.raises(InvalidTokenError):

@@ -31,13 +31,7 @@ async def register(
             detail=str(error),
         ) from error
 
-    return RegisterResponse(
-        id=user.id,
-        email=user.email,
-        first_name=user.first_name,
-        second_name=user.second_name,
-        role=user.role.name,
-    )
+    return user
 
 
 @router.post(

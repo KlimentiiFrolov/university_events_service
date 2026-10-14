@@ -8,7 +8,17 @@ from src.schemas.exceptions.domain import (
     ConflictError,
     NotFoundError,
 )
-from src.schemas.users import CreateUserSchema
+from src.schemas.users import CreateUserSchema, UserResponse
+
+
+def _to_user_response(user: User) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        first_name=user.first_name,
+        second_name=user.second_name,
+        role=user.role.name,
+    )
 
 
 class UserService:
@@ -28,7 +38,7 @@ class UserService:
     async def create_user(
             self,
             data: CreateUserSchema,
-    ) -> User:
+    ) -> UserResponse:
         existing = await self.uow.users.get_by_email(
             data.email
         )
@@ -74,9 +84,9 @@ class UserService:
             data.role.value,
         )
 
-        return user
+        return _to_user_response(user)
 
-    async def get_user(
+    async def _get_user(
         self,
         user_id: int,
     ) -> User:
@@ -92,11 +102,17 @@ class UserService:
         log.debug("User id=%d found", user_id)
         return user
 
-    async def get_users(self) -> list[User]:
+    async def get_user(
+        self,
+        user_id: int,
+    ) -> UserResponse:
+        return _to_user_response(await self._get_user(user_id))
+
+    async def get_users(self) -> list[UserResponse]:
         users = await self.uow.users.get_all()
 
         log.debug("Listed %d users", len(users))
-        return users
+        return [_to_user_response(user) for user in users]
 
     async def update_user(
         self,
@@ -105,8 +121,8 @@ class UserService:
         first_name: str | None = None,
         second_name: str | None = None,
         role: RoleName | None = None,
-    ) -> User:
-        user = await self.get_user(user_id)
+    ) -> UserResponse:
+        user = await self._get_user(user_id)
         updated_fields = []
 
         if first_name is not None:
@@ -124,13 +140,13 @@ class UserService:
         user = await self.uow.users.update(user)
 
         log.info("User id=%d updated, fields: %s", user_id, tuple(updated_fields))
-        return user
+        return _to_user_response(user)
 
     async def delete_user(
         self,
         user_id: int,
     ) -> None:
-        user = await self.get_user(user_id)
+        user = await self._get_user(user_id)
 
         await self.uow.users.delete(user)
 

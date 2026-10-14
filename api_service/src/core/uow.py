@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 
 from src.repositories.event_tags import EventTagRepository
 from src.repositories.events import EventRepository
