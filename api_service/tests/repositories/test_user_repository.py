@@ -8,17 +8,21 @@ from src.models.users import User
 async def test_add_persists_user_and_assigns_id(
     make_user,
 ):
+    email = "user@example.com"
+    first_name = "Test"
+    second_name = "User"
+
     user = await make_user(
-        email="user@example.com",
-        first_name="Test",
-        second_name="User",
+        email=email,
+        first_name=first_name,
+        second_name=second_name,
     )
 
     assert user.id is not None
-    assert user.email == "user@example.com"
-    assert user.first_name == "Test"
-    assert user.second_name == "User"
-    assert user.full_name == "Test User"
+    assert user.email == email
+    assert user.first_name == first_name
+    assert user.second_name == second_name
+    assert user.full_name == f"{first_name} {second_name}"
 
 
 async def test_get_by_id_returns_existing_user(
@@ -45,16 +49,16 @@ async def test_get_by_email_returns_existing_user(
     uow: UnitOfWork,
     make_user,
 ):
-    await make_user(
+    user = await make_user(
         email="user@example.com",
     )
 
     fetched = await uow.users.get_by_email(
-        "user@example.com"
+        user.email
     )
 
     assert fetched is not None
-    assert fetched.email == "user@example.com"
+    assert fetched.id == user.id
 
 
 async def test_get_by_email_returns_none_for_missing_user(
@@ -90,13 +94,14 @@ async def test_update_user(
         first_name="Old",
         second_name="Name",
     )
+    new_first_name = "New"
 
-    user.first_name = "New"
+    user.first_name = new_first_name
 
     updated = await uow.users.update(user)
 
-    assert updated.first_name == "New"
-    assert updated.full_name == "New Name"
+    assert updated.first_name == new_first_name
+    assert updated.full_name == f"{new_first_name} {user.second_name}"
 
 
 async def test_delete_user(

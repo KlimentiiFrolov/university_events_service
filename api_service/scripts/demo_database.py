@@ -14,6 +14,8 @@ from src.schemas.exceptions.domain import (
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
 from src.services.users import UserService
+from src.core.passwords import hash_password
+from src.schemas.users import CreateUserSchema
 
 # ЛОГИ
 
@@ -34,6 +36,10 @@ def success(message: str) -> None:
 
 async def main() -> None:
     suffix = uuid4().hex[:8]
+
+    demo_password_hash = hash_password(
+        "DemoPassword123!"
+    )
 
     print()
     print("=" * 72)
@@ -62,32 +68,40 @@ async def main() -> None:
         section(1, "Создание пользователей")
 
         organizer = await user_service.create_user(
+            CreateUserSchema(
             email=f"organizer-{suffix}@demo.local",
             first_name="Егор",
             second_name="Организатор",
             role=RoleName.ORGANIZER,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         participant = await user_service.create_user(
+            CreateUserSchema(
             email=participant_email,
             first_name="Иван",
             second_name="Петров",
             role=RoleName.PARTICIPANT,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         second_participant = await user_service.create_user(
+            CreateUserSchema(
             email=f"anna-{suffix}@demo.local",
             first_name="Анна",
             second_name="Сидорова",
             role=RoleName.PARTICIPANT,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         third_participant = await user_service.create_user(
+            CreateUserSchema(
             email=f"pavel-{suffix}@demo.local",
             first_name="Павел",
             second_name="Смирнов",
             role=RoleName.PARTICIPANT,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         participant_id = participant.id
 
@@ -783,11 +797,13 @@ async def main() -> None:
 
             temporary_user = (
                 await user_service.create_user(
+                    CreateUserSchema(
                     email=rollback_email,
                     first_name="Временный",
                     second_name="Пользователь",
                     role=RoleName.PARTICIPANT,
-                )
+                    password_hash=demo_password_hash,
+                ))
             )
 
             success(
