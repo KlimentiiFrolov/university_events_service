@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package recommendation.v1;
+
+service RecommendationService {
+    rpc Recommend(RecommendRequest)
+        returns (RecommendResponse);
+}
+
+message EventCandidate {
+    int64 event_id = 1;
+    repeated int64 tag_ids = 2;
+}
+
+message RecommendRequest {
+    repeated int64 visited_event_tag_ids = 1;
+    repeated EventCandidate events = 2;
+    int32 limit = 3;
+}
+
+message RecommendResponse {
+    repeated int64 event_ids = 1;
+}
