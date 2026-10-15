@@ -1,5 +1,5 @@
 import grpc
-from src.grpc.generated import (
+from src.core.grpc.generated import (
     recommendation_pb2,
     recommendation_pb2_grpc,
 )

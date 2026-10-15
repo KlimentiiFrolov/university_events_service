@@ -1,8 +1,8 @@
 import asyncio
 
 import grpc
-from src.grpc.generated import recommendation_pb2_grpc
-from src.grpc.servicer import RecommendationServicer
+from src.core.grpc.generated import recommendation_pb2_grpc
+from src.core.grpc.servicer import RecommendationServicer
 from src.core.config import settings
 from src.core.logger import log
 
