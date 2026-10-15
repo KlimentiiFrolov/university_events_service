@@ -3,6 +3,8 @@ import asyncio
 import grpc
 from src.grpc.generated import recommendation_pb2_grpc
 from src.grpc.servicer import RecommendationServicer
+from src.core.config import settings
+from src.core.logger import log
 
 
 async def main():
@@ -14,11 +16,12 @@ async def main():
         server,
     )
 
-    server.add_insecure_port("0.0.0.0:50051")
+    address = f"{settings.grpc_host}:{settings.grpc_port}"
+    server.add_insecure_port(address)
 
     await server.start()
 
-    print("Start")
+    log.info("gRPC server started on %s:%s", settings.grpc_host, settings.grpc_port)
 
     await server.wait_for_termination()
 

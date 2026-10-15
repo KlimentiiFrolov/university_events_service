@@ -12,7 +12,11 @@ from src.services.recommendations import (
 class RecommendationServicer(
     recommendation_pb2_grpc.RecommendationServiceServicer
 ):
-    async def Recommend(self, request, context):
+    async def Recommend(
+            self,
+            request: recommendation_pb2.RecommendRequest,
+            context: grpc.aio.ServicerContext,
+    ) -> recommendation_pb2.RecommendResponse:
 
         if not 1 <= request.limit <= 100:
             await context.abort(
