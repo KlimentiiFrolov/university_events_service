@@ -1,7 +1,11 @@
+from datetime import datetime
+
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.dates import get_current_datetime
+from src.models.event_tags import EventTag
+from src.models.events import Event
 from src.models.registrations import (
     Registration,
     RegistrationStatus,
@@ -38,6 +42,30 @@ class RegistrationRepository(BaseRepository[Registration]):
             select(Registration).where(
                 Registration.user_id == user_id
             )
+        )
+
+        return list(result.all())
+
+    async def list_visited_tag_ids(
+        self,
+        user_id: int,
+        *,
+        status: RegistrationStatus = RegistrationStatus.ACTIVE,
+        before: datetime | None = None,
+    ) -> list[int]:
+        if before is None:
+            before = get_current_datetime()
+
+        result = await self.session.scalars(
+            select(EventTag.tag_id)
+            .join(Registration, Registration.event_id == EventTag.event_id)
+            .join(Event, Event.id == EventTag.event_id)
+            .where(
+                Registration.user_id == user_id,
+                Registration.status == status,
+                Event.event_date < before,
+            )
+            .distinct()
         )
 
         return list(result.all())
