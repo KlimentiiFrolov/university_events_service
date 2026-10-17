@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from dependencies import AuthServiceDep
+from dependencies import AuthServiceDep, OrganizerDep
 from src.schemas.auth import (
     LoginRequest,
     RegisterRequest,
@@ -25,6 +25,27 @@ async def register(
 ) -> RegisterResponse:
     try:
         user = await service.register(data)
+    except ConflictError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+
+    return user
+
+
+@router.post(
+    "/register/organizer",
+    response_model=RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register_organizer(
+    data: RegisterRequest,
+    service: AuthServiceDep,
+    organizer: OrganizerDep,
+) -> RegisterResponse:
+    try:
+        user = await service.register_organizer(data, organizer.id)
     except ConflictError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

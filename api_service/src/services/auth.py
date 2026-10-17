@@ -16,9 +16,10 @@ class AuthService:
         self.uow = uow
         self.user_service = UserService(uow=uow)
 
-    async def register(
+    async def _register(
         self,
         data: RegisterRequest,
+        role: RoleName,
     ) -> RegisterResponse:
         password_hash = await asyncio.to_thread(
             hash_password,
@@ -31,16 +32,32 @@ class AuthService:
                 first_name=data.first_name,
                 second_name=data.second_name,
                 password_hash=password_hash,
-                role=RoleName.PARTICIPANT,
+                role=role,
             )
         )
 
         log.info(
-            "Participant user id=%d registered",
-            user.id,
+            "User id=%d registered with role=%s",
+            user.id, role,
         )
 
         return RegisterResponse(**user.model_dump())
+
+    async def register(
+        self,
+        data: RegisterRequest,
+    ) -> RegisterResponse:
+        return await self._register(data, RoleName.PARTICIPANT)
+
+    async def register_organizer(
+        self,
+        data: RegisterRequest,
+        created_by_id: int,
+    ) -> RegisterResponse:
+        user = await self._register(data, RoleName.ORGANIZER)
+
+        log.info("Organizer id=%d registered by organizer id=%d", user.id, created_by_id)
+        return user
 
     async def login(
         self,
