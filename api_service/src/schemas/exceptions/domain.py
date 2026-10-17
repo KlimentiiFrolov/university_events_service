@@ -12,7 +12,7 @@ class NotFoundError(DomainError):
         self.identifier = identifier
 
         super().__init__(
-            f"{entity} with identifier={identifier} was not found"
+            f"{entity} with {identifier} was not found"
         )
 
 
@@ -22,6 +22,14 @@ class ConflictError(DomainError):
 
 class ForbiddenError(DomainError):
     """У пользователя нет прав на выполнение операции."""
+
+
+class InvalidCredentialsError(DomainError):
+    """Неверный email или пароль."""
+
+
+class InvalidTokenError(DomainError):
+    """Токен доступа невалиден: подпись, срок действия, тип или содержимое."""
 
 
 class RegistrationAlreadyExistsError(ConflictError):

@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from src.core.passwords import hash_password
 from src.core.uow import UnitOfWork
 from src.models.roles import RoleName
 from src.models.tags import Tag
@@ -11,6 +12,7 @@ from src.schemas.exceptions.domain import (
     NotFoundError,
     RegistrationAlreadyExistsError,
 )
+from src.schemas.users import CreateUserSchema
 from src.services.events import EventService
 from src.services.registrations import RegistrationService
 from src.services.users import UserService
@@ -34,6 +36,10 @@ def success(message: str) -> None:
 
 async def main() -> None:
     suffix = uuid4().hex[:8]
+
+    demo_password_hash = hash_password(
+        "DemoPassword123!"
+    )
 
     print()
     print("=" * 72)
@@ -62,58 +68,66 @@ async def main() -> None:
         section(1, "Создание пользователей")
 
         organizer = await user_service.create_user(
+            CreateUserSchema(
             email=f"organizer-{suffix}@demo.local",
             first_name="Егор",
             second_name="Организатор",
             role=RoleName.ORGANIZER,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         participant = await user_service.create_user(
+            CreateUserSchema(
             email=participant_email,
             first_name="Иван",
             second_name="Петров",
             role=RoleName.PARTICIPANT,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         second_participant = await user_service.create_user(
+            CreateUserSchema(
             email=f"anna-{suffix}@demo.local",
             first_name="Анна",
             second_name="Сидорова",
             role=RoleName.PARTICIPANT,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         third_participant = await user_service.create_user(
+            CreateUserSchema(
             email=f"pavel-{suffix}@demo.local",
             first_name="Павел",
             second_name="Смирнов",
             role=RoleName.PARTICIPANT,
-        )
+            password_hash=demo_password_hash,
+        ))
 
         participant_id = participant.id
 
         success(
             f"Создан организатор: "
             f"id={organizer.id}, "
-            f"name={organizer.full_name}, "
-            f"role={organizer.role.name}"
+            f"name={organizer.first_name} {organizer.second_name}, "
+            f"role={organizer.role}"
         )
 
         success(
             f"Создан участник: "
             f"id={participant.id}, "
-            f"name={participant.full_name}"
+            f"name={participant.first_name} {participant.second_name}"
         )
 
         success(
             f"Создан участник: "
             f"id={second_participant.id}, "
-            f"name={second_participant.full_name}"
+            f"name={second_participant.first_name} {second_participant.second_name}"
         )
 
         success(
             f"Создан участник: "
             f"id={third_participant.id}, "
-            f"name={third_participant.full_name}"
+            f"name={third_participant.first_name} {third_participant.second_name}"
         )
 
 
@@ -128,7 +142,7 @@ async def main() -> None:
         success(
             f"Получен пользователь из БД: "
             f"id={fetched_user.id}, "
-            f"name={fetched_user.full_name}"
+            f"name={fetched_user.first_name} {fetched_user.second_name}"
         )
 
 
@@ -143,7 +157,7 @@ async def main() -> None:
 
         success(
             f"Пользователь обновлён: "
-            f"{updated_user.full_name}"
+            f"{updated_user.first_name} {updated_user.second_name}"
         )
 
         # ЭТАП 3
@@ -248,9 +262,9 @@ async def main() -> None:
         )
 
         tag_names = [
-            event_tag.tag.name
-            for event_tag
-            in event_with_tags.event_tags
+            tag.name
+            for tag
+            in event_with_tags.tags
         ]
 
         success(
@@ -355,9 +369,9 @@ async def main() -> None:
         )
 
         new_tag_names = {
-            event_tag.tag.name
-            for event_tag
-            in event_with_new_tags.event_tags
+            tag.name
+            for tag
+            in event_with_new_tags.tags
         }
 
         assert new_tag_names == {
@@ -417,12 +431,13 @@ async def main() -> None:
         participants = (
             await registration_service
             .get_event_participants(
-                event.id
+                event.id,
+                organizer.id
             )
         )
 
         participant_names = [
-            user.full_name
+            f"{user.first_name} {user.second_name}"
             for user in participants
         ]
 
@@ -522,7 +537,8 @@ async def main() -> None:
         participants_after_cancel = (
             await registration_service
             .get_event_participants(
-                event.id
+                event.id,
+                organizer.id
             )
         )
 
@@ -533,7 +549,7 @@ async def main() -> None:
         success(
             "После отмены активных участников: "
             + ", ".join(
-                user.full_name
+                f"{user.first_name} {user.second_name}"
                 for user
                 in participants_after_cancel
             )
@@ -566,7 +582,8 @@ async def main() -> None:
         participants_after_reregister = (
             await registration_service
             .get_event_participants(
-                event.id
+                event.id,
+                organizer.id
             )
         )
 
@@ -783,11 +800,13 @@ async def main() -> None:
 
             temporary_user = (
                 await user_service.create_user(
+                    CreateUserSchema(
                     email=rollback_email,
                     first_name="Временный",
                     second_name="Пользователь",
                     role=RoleName.PARTICIPANT,
-                )
+                    password_hash=demo_password_hash,
+                ))
             )
 
             success(
