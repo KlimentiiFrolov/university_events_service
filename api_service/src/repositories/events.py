@@ -38,9 +38,9 @@ class EventRepository(BaseRepository[Event]):
         with_tags: bool = False,
         for_update: bool = False,
     ) -> Event | None:
-        stmt = select(Event).where(
-            Event.id == entity_id,
-            Event.deleted_at.is_(None),
+        stmt = self._filter_deleted(
+            select(Event).where(Event.id == entity_id),
+            include_deleted=False,
         )
 
         if with_tags:
@@ -60,7 +60,7 @@ class EventRepository(BaseRepository[Event]):
         offset: int = 0,
     ) -> list[Event]:
         stmt = self._with_tags(
-            select(Event).where(Event.deleted_at.is_(None))
+            self._filter_deleted(select(Event), include_deleted=False)
         )
 
         if date_from is not None:
@@ -87,11 +87,10 @@ class EventRepository(BaseRepository[Event]):
         offset: int = 0,
     ) -> list[Event]:
         stmt = (
-            self._with_tags(select(Event))
-            .where(
-                Event.created_by_id == created_by_id,
-                Event.deleted_at.is_(None),
+            self._with_tags(
+                self._filter_deleted(select(Event), include_deleted=False)
             )
+            .where(Event.created_by_id == created_by_id)
             .order_by(Event.event_date, Event.id)
             .limit(limit)
             .offset(offset)
