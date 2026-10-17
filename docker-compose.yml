@@ -46,12 +46,23 @@ services:
   # ----------------------------------------------------------- services ---
   api_service:
     build: ./api_service
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
-    networks: [backend]
+    networks: [ backend ]
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api_service:
+        condition: service_started
+    networks: [ backend ]
 
   recommendation_service:
     build: ./recommendation_service

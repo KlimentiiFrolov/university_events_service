@@ -19,7 +19,7 @@ class RuntimeSettings(BaseSettings):
 
     host: Annotated[str, Field(default="0.0.0.0", alias="API_HOST")]
     port: Annotated[int, Field(default=8000, alias="API_PORT")]
-    reload: bool = True
+    reload: Annotated[bool, Field(default=False, alias="API_RELOAD")]
 
 
 class LoggerSettings(BaseModel):

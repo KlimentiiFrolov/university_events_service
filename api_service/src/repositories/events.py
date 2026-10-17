@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +17,12 @@ class EventRepository(BaseRepository[Event]):
             session=session,
         )
 
+    @staticmethod
+    def _with_tags(stmt: Select[tuple[Event]]) -> Select[tuple[Event]]:
+        return stmt.options(
+            selectinload(Event.event_tags).selectinload(EventTag.tag)
+        )
+
     async def get_by_id(
         self,
         entity_id: int,
@@ -24,12 +30,13 @@ class EventRepository(BaseRepository[Event]):
         with_tags: bool = False,
         for_update: bool = False,
     ) -> Event | None:
-        stmt = select(Event).where(Event.id == entity_id)
+        stmt = select(Event).where(
+            Event.id == entity_id,
+            Event.deleted_at.is_(None),
+        )
 
         if with_tags:
-            stmt = stmt.options(
-                selectinload(Event.event_tags).selectinload(EventTag.tag)
-            )
+            stmt = self._with_tags(stmt)
         if for_update:
             stmt = stmt.with_for_update()
 
@@ -44,7 +51,9 @@ class EventRepository(BaseRepository[Event]):
         limit: int = 20,
         offset: int = 0,
     ) -> list[Event]:
-        stmt = select(Event).where(Event.deleted_at.is_(None))
+        stmt = self._with_tags(
+            select(Event).where(Event.deleted_at.is_(None))
+        )
 
         if date_from is not None:
             stmt = stmt.where(Event.event_date >= date_from)
@@ -70,7 +79,7 @@ class EventRepository(BaseRepository[Event]):
         offset: int = 0,
     ) -> list[Event]:
         stmt = (
-            select(Event)
+            self._with_tags(select(Event))
             .where(
                 Event.created_by_id == created_by_id,
                 Event.deleted_at.is_(None),
