@@ -1,4 +1,4 @@
-from src.clients.recommendations import RecommendationClient
+from src.clients.recommendations import BaseRecommendationClient
 from src.core.config import settings
 from src.core.logger import log
 from src.core.uow import UnitOfWork
@@ -10,7 +10,7 @@ class RecommendationService:
     def __init__(
         self,
         uow: UnitOfWork,
-        client: RecommendationClient,
+        client: BaseRecommendationClient,
         *,
         max_candidates: int = settings.recommendation.max_candidates,
     ):
