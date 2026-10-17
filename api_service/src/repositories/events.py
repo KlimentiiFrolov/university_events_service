@@ -1,11 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
+from src.core.dates import get_current_datetime
 from src.models.event_tags import EventTag
 from src.models.events import Event
+from src.models.registrations import Registration, RegistrationStatus
 
 from .base import BaseRepository
 
@@ -91,3 +93,63 @@ class EventRepository(BaseRepository[Event]):
 
         result = await self.session.scalars(stmt)
         return list(result.all())
+
+    async def list_recommendation_candidates(
+        self,
+        user_id: int,
+        *,
+        after: datetime | None = None,
+        include_deleted: bool = False,
+        limit: int = 1000,
+    ) -> list[tuple[int, list[int]]]:
+        if after is None:
+            after = get_current_datetime()
+
+        active_counts = (
+            select(
+                Registration.event_id,
+                func.count(Registration.id).label("active_count"),
+            )
+            .where(Registration.status == RegistrationStatus.ACTIVE)
+            .group_by(Registration.event_id)
+            .subquery()
+        )
+
+        # Регистрация (user_id, event_id) уникальна, поэтому join не размножает строки
+        user_registration = aliased(Registration)
+
+        tag_ids = func.array_agg(EventTag.tag_id).filter(EventTag.tag_id.is_not(None))
+
+        stmt = (
+            select(Event.id, tag_ids)
+            .outerjoin(EventTag, EventTag.event_id == Event.id)
+            .outerjoin(active_counts, active_counts.c.event_id == Event.id)
+            .outerjoin(
+                user_registration,
+                and_(
+                    user_registration.event_id == Event.id,
+                    user_registration.user_id == user_id,
+                    user_registration.status == RegistrationStatus.ACTIVE,
+                ),
+            )
+            .where(
+                Event.event_date > after,
+                # Без активных регистраций строки в active_counts нет, поэтому NULL -> 0
+                func.coalesce(active_counts.c.active_count, 0) < Event.capacity,
+                # Пользователь ещё не записан на мероприятие
+                user_registration.id.is_(None),
+            )
+            .group_by(Event.id)
+            .order_by(Event.event_date, Event.id)
+            .limit(limit)
+        )
+
+        if not include_deleted:
+            stmt = stmt.where(Event.deleted_at.is_(None))
+
+        result = await self.session.execute(stmt)
+        # array_agg по пустому набору возвращает NULL, а не пустой массив
+        return [
+            (event_id, event_tag_ids or []) 
+            for event_id, event_tag_ids in result.all()
+        ]
