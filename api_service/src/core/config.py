@@ -66,6 +66,20 @@ class RabbitMQSettings(BaseSettings):
         )
 
 
+class RecommendationSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(ENV_TEMPLATE, ENV_FILE),
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    grpc_target: Annotated[str, Field(alias="RECOMMENDATION_GRPC_TARGET")]
+    timeout: Annotated[float, Field(default=2.0, gt=0, alias="RECOMMENDATION_GRPC_TIMEOUT")]
+    max_candidates: Annotated[
+        int, Field(default=1000, ge=1, alias="RECOMMENDATION_MAX_CANDIDATES")
+    ]
+
+
 class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(ENV_TEMPLATE, ENV_FILE),
@@ -97,6 +111,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings) # type: ignore
     rabbitmq: RabbitMQSettings = Field(default_factory=RabbitMQSettings) # type: ignore
     auth: AuthSettings = Field(default_factory=AuthSettings) # type: ignore
+    recommendation: RecommendationSettings = Field(default_factory=RecommendationSettings) # type: ignore
 
     log: LoggerSettings = LoggerSettings()
 
