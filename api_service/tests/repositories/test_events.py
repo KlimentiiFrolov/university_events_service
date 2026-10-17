@@ -308,3 +308,41 @@ async def test_list_recommendation_candidates_respects_limit(
     candidates = await uow.events.list_recommendation_candidates(user.id, limit=2)
 
     assert [event_id for event_id, _ in candidates] == [first.id, second.id]
+
+
+async def test_list_by_ids_returns_requested_events(uow: UnitOfWork, make_event):
+    first = await make_event(title="First")
+    second = await make_event(title="Second")
+    await make_event(title="Other")
+
+    events = await uow.events.list_by_ids([second.id, first.id, 999_999])
+
+    assert {event.id for event in events} == {first.id, second.id}
+
+
+async def test_list_by_ids_returns_empty_list_for_empty_ids(uow: UnitOfWork, make_event):
+    await make_event()
+
+    assert await uow.events.list_by_ids([]) == []
+
+
+async def test_list_by_ids_include_deleted(uow: UnitOfWork, make_event):
+    event = await make_event()
+    event.deleted_at = get_current_datetime()
+    await uow.events.update(event)
+
+    assert await uow.events.list_by_ids([event.id]) == []
+
+    events = await uow.events.list_by_ids([event.id], include_deleted=True)
+    assert [fetched.id for fetched in events] == [event.id]
+
+
+async def test_list_by_ids_with_tags_loads_relationship(uow: UnitOfWork, make_event, make_tag):
+    event = await make_event()
+    tag = await make_tag()
+    await uow.event_tags.add_tags(event.id, [tag.id])
+    uow.session.expunge_all()
+
+    [fetched] = await uow.events.list_by_ids([event.id], with_tags=True)
+
+    assert [event_tag.tag.id for event_tag in fetched.event_tags] == [tag.id]

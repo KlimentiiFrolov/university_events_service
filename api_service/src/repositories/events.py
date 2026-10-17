@@ -25,6 +25,12 @@ class EventRepository(BaseRepository[Event]):
             selectinload(Event.event_tags).selectinload(EventTag.tag)
         )
 
+    @staticmethod
+    def _filter_deleted(stmt: Select, *, include_deleted: bool) -> Select:
+        if include_deleted:
+            return stmt
+        return stmt.where(Event.deleted_at.is_(None))
+
     async def get_by_id(
         self,
         entity_id: int,
@@ -94,6 +100,27 @@ class EventRepository(BaseRepository[Event]):
         result = await self.session.scalars(stmt)
         return list(result.all())
 
+    async def list_by_ids(
+        self,
+        ids: list[int],
+        *,
+        with_tags: bool = False,
+        include_deleted: bool = False,
+    ) -> list[Event]:
+        if not ids:
+            return []
+
+        stmt = self._filter_deleted(
+            select(Event).where(Event.id.in_(ids)),
+            include_deleted=include_deleted,
+        )
+
+        if with_tags:
+            stmt = self._with_tags(stmt)
+
+        result = await self.session.scalars(stmt)
+        return list(result.all())
+
     async def list_recommendation_candidates(
         self,
         user_id: int,
@@ -143,9 +170,7 @@ class EventRepository(BaseRepository[Event]):
             .order_by(Event.event_date, Event.id)
             .limit(limit)
         )
-
-        if not include_deleted:
-            stmt = stmt.where(Event.deleted_at.is_(None))
+        stmt = self._filter_deleted(stmt, include_deleted=include_deleted)
 
         result = await self.session.execute(stmt)
         # array_agg по пустому набору возвращает NULL, а не пустой массив
