@@ -64,7 +64,8 @@ async def test_recommend_builds_request_and_returns_ids(
 
     assert event_ids == [12, 10]
 
-    [request] = servicer.requests
+    assert len(servicer.requests) == 1
+    request = servicer.requests[0]
     assert list(request.visited_event_tag_ids) == [1, 2]
     assert [(event.event_id, list(event.tag_ids)) for event in request.events] == [
         (10, [1]),

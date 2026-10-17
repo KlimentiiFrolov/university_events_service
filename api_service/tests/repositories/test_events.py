@@ -343,6 +343,7 @@ async def test_list_by_ids_with_tags_loads_relationship(uow: UnitOfWork, make_ev
     await uow.event_tags.add_tags(event.id, [tag.id])
     uow.session.expunge_all()
 
-    [fetched] = await uow.events.list_by_ids([event.id], with_tags=True)
+    events = await uow.events.list_by_ids([event.id], with_tags=True)
 
-    assert [event_tag.tag.id for event_tag in fetched.event_tags] == [tag.id]
+    assert len(events) == 1
+    assert [event_tag.tag.id for event_tag in events[0].event_tags] == [tag.id]
