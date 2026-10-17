@@ -1,4 +1,5 @@
 import grpc
+
 from src.core.grpc.generated import (
     recommendation_pb2,
     recommendation_pb2_grpc,
@@ -13,9 +14,9 @@ class RecommendationServicer(
     recommendation_pb2_grpc.RecommendationServiceServicer
 ):
     async def Recommend(
-            self,
-            request: recommendation_pb2.RecommendRequest,
-            context: grpc.aio.ServicerContext,
+        self,
+        request: recommendation_pb2.RecommendRequest,
+        context: grpc.aio.ServicerContext,
     ) -> recommendation_pb2.RecommendResponse:
 
         if not 1 <= request.limit <= 100:
