@@ -23,8 +23,7 @@ class FakeRecommendationClient:
 
 
 def make_service(uow: UnitOfWork, client: FakeRecommendationClient, **kwargs):
-    return RecommendationService(uow=uow, client=client, **kwargs)  # type: ignore[arg-type]
-
+    return RecommendationService(uow=uow, client=client, **kwargs)
 
 async def test_recommend_events_passes_history_and_candidates_to_client(
     uow: UnitOfWork, make_user, make_event, make_tag
