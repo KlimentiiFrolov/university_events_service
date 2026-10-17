@@ -24,3 +24,10 @@ dev = [
 
 [tool.ruff]
 line-length = 100
+extend-exclude = [
+    "src/alembic/versions",
+    "src/core/grpc/generated",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
