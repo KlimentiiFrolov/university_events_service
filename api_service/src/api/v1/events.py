@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException, Query, status
 from dependencies import (
     EventServiceDep,
     OrganizerDep,
+    ParticipantDep,
+    RecommendationServiceDep,
     RegistrationServiceDep,
 )
 from src.schemas.events import (
@@ -12,10 +14,16 @@ from src.schemas.events import (
     EventFilterParams,
     EventListResponse,
     EventResponse,
+    RecommendationListResponse,
     SetEventTagsSchema,
     UpdateEventSchema,
 )
-from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
+from src.schemas.exceptions.domain import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    RecommendationUnavailableError,
+)
 from src.schemas.pagination import PaginationParams
 from src.schemas.registrations import ParticipantListResponse
 
@@ -42,6 +50,22 @@ async def list_organizer_events(
         items=events,
     )
 
+
+@router.get("/recommendations", response_model=RecommendationListResponse)
+async def list_recommendations(
+    service: RecommendationServiceDep,
+    participant: ParticipantDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> RecommendationListResponse:
+    try:
+        events = await service.recommend_events(participant.id, limit)
+    except RecommendationUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Recommendation service is unavailable. Please try again later.",
+        ) from error
+
+    return RecommendationListResponse(items=events)
 
 
 @router.get("", response_model=EventListResponse)
