@@ -1,4 +1,5 @@
 from time import perf_counter
+from typing import Protocol
 
 import grpc
 
@@ -7,6 +8,16 @@ from src.core.logger import log
 from src.schemas.exceptions.domain import RecommendationUnavailableError
 
 type Candidate = tuple[int, list[int]]
+
+
+class BaseRecommendationClient(Protocol):
+    async def recommend(
+        self,
+        visited_tag_ids: list[int],
+        candidates: list[Candidate],
+        limit: int,
+    ) -> list[int]:
+        ...
 
 
 class RecommendationClient:
