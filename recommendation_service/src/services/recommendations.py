@@ -1,4 +1,7 @@
+import logging
 from dataclasses import dataclass
+
+from src.core.logger import log
 
 
 @dataclass
@@ -22,6 +25,15 @@ def recommend_event_ids(
             visited_tags & set(event.tag_ids)
         ),
         reverse=True,
+    )
+
+    log.debug(
+        "Ranking by visited tags %s: %s",
+        sorted(visited_tags),
+        [
+            (event.event_id, len(visited_tags & set(event.tag_ids)))
+            for event in sorted_events
+        ],
     )
 
     return [

@@ -1,7 +1,7 @@
 
 from time import perf_counter
 
-from src.grpc.generated import recommendation_pb2
+from src.core.grpc.generated import recommendation_pb2
 
 
 def test_serialization(count: int) -> None:

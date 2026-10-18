@@ -1,8 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from src.core.dates import get_current_datetime
 from src.core.uow import UnitOfWork
 from src.models.event_tags import EventTag
 from src.models.events import Event
+from src.models.registrations import Registration, RegistrationStatus
 from src.models.tags import Tag
 
 
@@ -153,3 +155,195 @@ async def test_get_by_id_returns_each_seeded_event(
 
         assert fetched is not None
         assert fetched.title == expected.title
+
+
+async def _register(
+    uow: UnitOfWork,
+    user_id: int,
+    event_id: int,
+    status: RegistrationStatus | None = None,
+) -> None:
+    await uow.registrations.add(
+        Registration(
+            user_id=user_id,
+            event_id=event_id,
+            status=status or RegistrationStatus.ACTIVE,
+        )
+    )
+
+
+async def test_list_recommendation_candidates_returns_future_events_with_tags(
+    uow: UnitOfWork, make_user, make_event, make_tag
+):
+    user = await make_user()
+    now = get_current_datetime()
+    tag_a = await make_tag()
+    tag_b = await make_tag()
+
+    tagged = await make_event(event_date=now + timedelta(days=1))
+    untagged = await make_event(event_date=now + timedelta(days=2))
+    await make_event(event_date=now - timedelta(days=1))
+    await uow.event_tags.add_tags(tagged.id, [tag_a.id, tag_b.id])
+
+    candidates = await uow.events.list_recommendation_candidates(user.id)
+
+    assert [event_id for event_id, _ in candidates] == [tagged.id, untagged.id]
+    assert sorted(candidates[0][1]) == sorted([tag_a.id, tag_b.id])
+    assert candidates[1][1] == []
+
+
+async def test_list_recommendation_candidates_sorted_by_date_then_id(
+    uow: UnitOfWork, make_user, make_event
+):
+    user = await make_user()
+    now = get_current_datetime()
+    same_date = now + timedelta(days=3)
+
+    late = await make_event(event_date=now + timedelta(days=5))
+    first_same = await make_event(event_date=same_date)
+    second_same = await make_event(event_date=same_date)
+    early = await make_event(event_date=now + timedelta(days=1))
+
+    candidates = await uow.events.list_recommendation_candidates(user.id)
+
+    assert [event_id for event_id, _ in candidates] == [
+        early.id,
+        first_same.id,
+        second_same.id,
+        late.id,
+    ]
+
+
+async def test_list_recommendation_candidates_excludes_events_user_registered_for(
+    uow: UnitOfWork, make_user, make_event
+):
+    user = await make_user()
+    future = get_current_datetime() + timedelta(days=1)
+
+    registered = await make_event(event_date=future)
+    cancelled = await make_event(event_date=future)
+    free = await make_event(event_date=future)
+
+    await _register(uow, user.id, registered.id)
+    await _register(uow, user.id, cancelled.id, RegistrationStatus.CANCELLED)
+
+    candidates = await uow.events.list_recommendation_candidates(user.id)
+
+    # После отмены регистрации мероприятие снова можно рекомендовать
+    assert {event_id for event_id, _ in candidates} == {cancelled.id, free.id}
+    assert registered.id not in {event_id for event_id, _ in candidates}
+
+
+async def test_list_recommendation_candidates_excludes_full_events(
+    uow: UnitOfWork, make_user, make_event
+):
+    user = await make_user()
+    other = await make_user()
+    another = await make_user()
+    future = get_current_datetime() + timedelta(days=1)
+
+    full = await make_event(event_date=future, capacity=1)
+    with_cancelled = await make_event(event_date=future, capacity=1)
+    zero_capacity = await make_event(event_date=future, capacity=0)
+
+    await _register(uow, other.id, full.id)
+    await _register(uow, another.id, with_cancelled.id, RegistrationStatus.CANCELLED)
+
+    candidates = await uow.events.list_recommendation_candidates(user.id)
+
+    assert [event_id for event_id, _ in candidates] == [with_cancelled.id]
+    assert zero_capacity.id not in {event_id for event_id, _ in candidates}
+
+
+async def test_list_recommendation_candidates_include_deleted(
+    uow: UnitOfWork, make_user, make_event
+):
+    user = await make_user()
+    event = await make_event(event_date=get_current_datetime() + timedelta(days=1))
+    event.deleted_at = get_current_datetime()
+    await uow.events.update(event)
+
+    assert await uow.events.list_recommendation_candidates(user.id) == []
+
+    candidates = await uow.events.list_recommendation_candidates(
+        user.id,
+        include_deleted=True,
+    )
+    assert [event_id for event_id, _ in candidates] == [event.id]
+
+
+async def test_list_recommendation_candidates_respects_after(
+    uow: UnitOfWork, make_user, make_event
+):
+    user = await make_user()
+    now = get_current_datetime()
+
+    past = await make_event(event_date=now - timedelta(days=5))
+    soon = await make_event(event_date=now + timedelta(days=1))
+    later = await make_event(event_date=now + timedelta(days=10))
+
+    candidates = await uow.events.list_recommendation_candidates(
+        user.id,
+        after=now - timedelta(days=10),
+    )
+    assert [event_id for event_id, _ in candidates] == [past.id, soon.id, later.id]
+
+    candidates = await uow.events.list_recommendation_candidates(
+        user.id,
+        after=now + timedelta(days=5),
+    )
+    assert [event_id for event_id, _ in candidates] == [later.id]
+
+
+async def test_list_recommendation_candidates_respects_limit(
+    uow: UnitOfWork, make_user, make_event
+):
+    user = await make_user()
+    now = get_current_datetime()
+
+    first = await make_event(event_date=now + timedelta(days=1))
+    second = await make_event(event_date=now + timedelta(days=2))
+    await make_event(event_date=now + timedelta(days=3))
+
+    candidates = await uow.events.list_recommendation_candidates(user.id, limit=2)
+
+    assert [event_id for event_id, _ in candidates] == [first.id, second.id]
+
+
+async def test_list_by_ids_returns_requested_events(uow: UnitOfWork, make_event):
+    first = await make_event(title="First")
+    second = await make_event(title="Second")
+    await make_event(title="Other")
+
+    events = await uow.events.list_by_ids([second.id, first.id, 999_999])
+
+    assert {event.id for event in events} == {first.id, second.id}
+
+
+async def test_list_by_ids_returns_empty_list_for_empty_ids(uow: UnitOfWork, make_event):
+    await make_event()
+
+    assert await uow.events.list_by_ids([]) == []
+
+
+async def test_list_by_ids_include_deleted(uow: UnitOfWork, make_event):
+    event = await make_event()
+    event.deleted_at = get_current_datetime()
+    await uow.events.update(event)
+
+    assert await uow.events.list_by_ids([event.id]) == []
+
+    events = await uow.events.list_by_ids([event.id], include_deleted=True)
+    assert [fetched.id for fetched in events] == [event.id]
+
+
+async def test_list_by_ids_with_tags_loads_relationship(uow: UnitOfWork, make_event, make_tag):
+    event = await make_event()
+    tag = await make_tag()
+    await uow.event_tags.add_tags(event.id, [tag.id])
+    uow.session.expunge_all()
+
+    events = await uow.events.list_by_ids([event.id], with_tags=True)
+
+    assert len(events) == 1
+    assert [event_tag.tag.id for event_tag in events[0].event_tags] == [tag.id]

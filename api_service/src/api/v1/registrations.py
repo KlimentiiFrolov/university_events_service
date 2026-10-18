@@ -34,7 +34,7 @@ async def get_my_registrations(
     )
 
 
-@router.post( "/{event_id}", response_model=RegistrationResponse, status_code=status.HTTP_201_CREATED,)
+@router.post("/{event_id}", response_model=RegistrationResponse, status_code=status.HTTP_201_CREATED,)
 async def register_for_event(
     event_id: int,
     service: RegistrationServiceDep,

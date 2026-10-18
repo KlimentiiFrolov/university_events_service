@@ -127,3 +127,42 @@ async def test_login_with_unknown_email_fails(
                 password="SecretPassword123!",
             )
         )
+
+
+def _organizer_data() -> RegisterRequest:
+    return RegisterRequest(
+        email="organizer@example.com",
+        password="SecretPassword123!",
+        first_name="Olga",
+        second_name="Organizer",
+    )
+
+
+async def test_register_organizer_creates_organizer(
+    uow: UnitOfWork,
+    make_user,
+):
+    creator = await make_user(role=RoleName.ORGANIZER)
+    service = AuthService(uow)
+
+    user = await service.register_organizer(_organizer_data(), creator.id)
+
+    assert user.role == RoleName.ORGANIZER
+
+    persisted = await uow.users.get_by_id(user.id)
+
+    assert persisted is not None
+    assert persisted.role.name == RoleName.ORGANIZER
+
+
+async def test_register_organizer_duplicate_email_raises_conflict(
+    uow: UnitOfWork,
+    make_user,
+):
+    creator = await make_user(role=RoleName.ORGANIZER)
+    service = AuthService(uow)
+
+    await service.register(_organizer_data())
+
+    with pytest.raises(ConflictError):
+        await service.register_organizer(_organizer_data(), creator.id)

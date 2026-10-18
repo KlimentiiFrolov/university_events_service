@@ -46,3 +46,6 @@ class RegistrationAlreadyActiveError(ConflictError):
 
 class EventCapacityExceededError(ConflictError):
     """На мероприятии больше нет свободных мест."""
+
+class RecommendationUnavailableError(DomainError):
+    """Сервис рекомендаций недоступен или вернул ошибку."""

@@ -16,25 +16,19 @@
             {
               "listen": "prerequest",
               "script": {
-                "exec": [
-                  "// Уникальный email, чтобы запрос можно было повторять",
-                  "pm.collectionVariables.set('participantEmail', `participant-${Date.now()}@example.com`);"
-                ],
                 "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "exec": [
+                  "// Уникальный email, чтобы запрос можно было повторять\npm.collectionVariables.set('participantEmail', `participant-${Date.now()}@example.com`);"
+                ]
               }
             },
             {
               "listen": "test",
               "script": {
-                "exec": [
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
-                  "pm.test('role is participant', () => pm.expect(pm.response.json().role).to.eql('participant'));"
-                ],
                 "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));\npm.test('role is participant', () => pm.expect(pm.response.json().role).to.eql('participant'));"
+                ]
               }
             }
           ],
@@ -48,7 +42,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@admin.com\",\n  \"password\": \"admin123\",\n  \"first_name\": \"Admin\",\n  \"second_name\": \"Adminov\"\n}",
+              "raw": "{\n  \"email\": \"anna@demo.com\",\n  \"password\": \"DemoPassword123\",\n  \"first_name\": \"Anna\",\n  \"second_name\": \"Participant\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -66,6 +60,43 @@
               ]
             },
             "description": "Регистрация участника. Роль всегда `participant`.\n\nОтветы: 201, 409 (email занят), 422 (невалидное тело: пароль короче 8 символов или длиннее 72 байт и т.п.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Register organizer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{organizerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"test-organizer@example.com\",\r\n    \"password\": \"test_craft123\",\r\n    \"first_name\": \"Test\",\r\n    \"second_name\": \"Organizer\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register/organizer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register",
+                "organizer"
+              ]
+            }
           },
           "response": []
         },
@@ -105,7 +136,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"gzazulya@gmail.com\",\n  \"password\": \"Craft123\"\n}",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"123987654\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -327,6 +358,38 @@
             "description": "Мероприятие с тегами. Без авторизации.\n\nОтветы: 200, 404 (нет или удалено), 422 (нечисловой id)."
           },
           "response": []
+        },
+        {
+          "name": "List Recommendations",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{participantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/recommendations?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "recommendations"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
         }
       ],
       "auth": {
@@ -342,17 +405,17 @@
             {
               "listen": "test",
               "script": {
-                "exec": [
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set('eventId', pm.response.json().id);"
-                ],
                 "type": "text/javascript",
-                "packages": {},
-                "requests": {}
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));\npm.collectionVariables.set('eventId', pm.response.json().id);"
+                ]
               }
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
               {
@@ -361,13 +424,12 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{organizerToken}}",
-                "type": "text"
+                "value": "Bearer {{organizerToken}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Хакатон по ML\",\n  \"text\": \"24 часа, команды до 4 человек\",\n  \"location\": \"Главный корпус, ауд. 101\",\n  \"event_date\": \"2026-11-15T10:00:00Z\",\n  \"capacity\": 50,\n  \"tag_ids\": [{{tagId}}]\n}",
+              "raw": "{\n  \"title\": \"Git Basics\",\n  \"text\": \"Основы git\",\n  \"location\": \"Room 101\",\n  \"event_date\": \"2027-01-12T17:00:00+03:00\",\n  \"capacity\": 25,\n  \"tag_ids\": [1]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -403,6 +465,9 @@
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [
               {
@@ -452,11 +517,19 @@
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{organizerToken}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -469,20 +542,13 @@
               }
             },
             "url": {
-              "raw": "{{baseUrl}}/events/{{eventId}}?Authorization=Bearer {{organizerToken}}",
+              "raw": "{{baseUrl}}/events/{{eventId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "events",
                 "{{eventId}}"
-              ],
-              "query": [
-                {
-                  "key": "Authorization",
-                  "value": "Bearer {{organizerToken}}",
-                  "type": "text"
-                }
               ]
             },
             "description": "Частичное обновление: меняются только переданные поля. `\"text\": null` очищает описание; null для title/location/event_date/capacity — 422.\n\nОтветы: 200, 404, 409 (capacity меньше числа активных регистраций), 422."
@@ -505,11 +571,19 @@
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{organizerToken}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -522,7 +596,7 @@
               }
             },
             "url": {
-              "raw": "{{baseUrl}}/events/{{eventId}}/tags?Authorization=Bearer {{organizerToken}}",
+              "raw": "{{baseUrl}}/events/{{eventId}}/tags",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -530,13 +604,6 @@
                 "events",
                 "{{eventId}}",
                 "tags"
-              ],
-              "query": [
-                {
-                  "key": "Authorization",
-                  "value": "Bearer {{organizerToken}}",
-                  "type": "text"
-                }
               ]
             },
             "description": "Полная замена набора тегов. Пустой список убирает все теги.\n\nОтветы: 200, 404 (нет мероприятия или неизвестный тег — текущие теги не меняются), 422."
@@ -559,23 +626,25 @@
             }
           ],
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{organizerToken}}",
+                "type": "text"
+              }
+            ],
             "url": {
-              "raw": "{{baseUrl}}/events/{{eventId}}?Authorization=Bearer {{organizerToken}}",
+              "raw": "{{baseUrl}}/events/{{eventId}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "events",
                 "{{eventId}}"
-              ],
-              "query": [
-                {
-                  "key": "Authorization",
-                  "value": "Bearer {{organizerToken}}",
-                  "type": "text"
-                }
               ]
             },
             "description": "Мягкое удаление: мероприятие пропадает из каталога, активные регистрации отменяются.\n\nОтветы: 204, 404 (нет или уже удалено)."
@@ -585,6 +654,9 @@
         {
           "name": "Get event participants",
           "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [],
             "url": {
