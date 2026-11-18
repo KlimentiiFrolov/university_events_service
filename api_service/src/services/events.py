@@ -3,6 +3,8 @@ from datetime import datetime
 from src.core.dates import get_current_datetime
 from src.core.logger import log
 from src.core.uow import UnitOfWork
+from src.events.payloads import EventCancelledPayload, EventUpdatedPayload
+from src.events.types import DomainEventType
 from src.models.events import Event
 from src.schemas.events import CreateEventSchema, EventResponse, UpdateEventSchema
 from src.schemas.exceptions.domain import ConflictError, ForbiddenError, NotFoundError
@@ -161,6 +163,12 @@ class EventService:
 
         await self.uow.events.update(event)
 
+        if updates:
+            await self.uow.outbox.add_event(
+                DomainEventType.EVENT_UPDATED,
+                EventUpdatedPayload(event_id=event_id, changed_fields=list(updates)),
+            )
+
         log.info(
             "Event id=%d updated by user id=%d, fields: %s",
             event_id, organizer_id, tuple(updates),
@@ -200,6 +208,11 @@ class EventService:
 
         event.deleted_at = get_current_datetime()
         await self.uow.events.update(event)
+
+        await self.uow.outbox.add_event(
+            DomainEventType.EVENT_CANCELLED,
+            EventCancelledPayload(event_id=event_id, participant_ids=cancelled_user_ids),
+        )
 
         log.info(
             "Event id=%d deleted by user id=%d, cancelled %d registration(s)",
