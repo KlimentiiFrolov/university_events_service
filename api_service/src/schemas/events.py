@@ -86,3 +86,6 @@ class EventListResponse(BaseModel):
     per_page: int
     items: list[EventResponse]
 
+
+class RecommendationListResponse(BaseModel):
+    items: list[EventResponse]

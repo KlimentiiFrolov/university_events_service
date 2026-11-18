@@ -1,11 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
+from src.core.dates import get_current_datetime
 from src.models.event_tags import EventTag
 from src.models.events import Event
+from src.models.registrations import Registration, RegistrationStatus
 
 from .base import BaseRepository
 
@@ -23,6 +25,12 @@ class EventRepository(BaseRepository[Event]):
             selectinload(Event.event_tags).selectinload(EventTag.tag)
         )
 
+    @staticmethod
+    def _filter_deleted(stmt: Select, *, include_deleted: bool) -> Select:
+        if include_deleted:
+            return stmt
+        return stmt.where(Event.deleted_at.is_(None))
+
     async def get_by_id(
         self,
         entity_id: int,
@@ -30,9 +38,9 @@ class EventRepository(BaseRepository[Event]):
         with_tags: bool = False,
         for_update: bool = False,
     ) -> Event | None:
-        stmt = select(Event).where(
-            Event.id == entity_id,
-            Event.deleted_at.is_(None),
+        stmt = self._filter_deleted(
+            select(Event).where(Event.id == entity_id),
+            include_deleted=False,
         )
 
         if with_tags:
@@ -52,7 +60,7 @@ class EventRepository(BaseRepository[Event]):
         offset: int = 0,
     ) -> list[Event]:
         stmt = self._with_tags(
-            select(Event).where(Event.deleted_at.is_(None))
+            self._filter_deleted(select(Event), include_deleted=False)
         )
 
         if date_from is not None:
@@ -79,11 +87,10 @@ class EventRepository(BaseRepository[Event]):
         offset: int = 0,
     ) -> list[Event]:
         stmt = (
-            self._with_tags(select(Event))
-            .where(
-                Event.created_by_id == created_by_id,
-                Event.deleted_at.is_(None),
+            self._with_tags(
+                self._filter_deleted(select(Event), include_deleted=False)
             )
+            .where(Event.created_by_id == created_by_id)
             .order_by(Event.event_date, Event.id)
             .limit(limit)
             .offset(offset)
@@ -91,3 +98,82 @@ class EventRepository(BaseRepository[Event]):
 
         result = await self.session.scalars(stmt)
         return list(result.all())
+
+    async def list_by_ids(
+        self,
+        ids: list[int],
+        *,
+        with_tags: bool = False,
+        include_deleted: bool = False,
+    ) -> list[Event]:
+        if not ids:
+            return []
+
+        stmt = self._filter_deleted(
+            select(Event).where(Event.id.in_(ids)),
+            include_deleted=include_deleted,
+        )
+
+        if with_tags:
+            stmt = self._with_tags(stmt)
+
+        result = await self.session.scalars(stmt)
+        return list(result.all())
+
+    async def list_recommendation_candidates(
+        self,
+        user_id: int,
+        *,
+        after: datetime | None = None,
+        include_deleted: bool = False,
+        limit: int = 1000,
+    ) -> list[tuple[int, list[int]]]:
+        if after is None:
+            after = get_current_datetime()
+
+        active_counts = (
+            select(
+                Registration.event_id,
+                func.count(Registration.id).label("active_count"),
+            )
+            .where(Registration.status == RegistrationStatus.ACTIVE)
+            .group_by(Registration.event_id)
+            .subquery()
+        )
+
+        # Регистрация (user_id, event_id) уникальна, поэтому join не размножает строки
+        user_registration = aliased(Registration)
+
+        tag_ids = func.array_agg(EventTag.tag_id).filter(EventTag.tag_id.is_not(None))
+
+        stmt = (
+            select(Event.id, tag_ids)
+            .outerjoin(EventTag, EventTag.event_id == Event.id)
+            .outerjoin(active_counts, active_counts.c.event_id == Event.id)
+            .outerjoin(
+                user_registration,
+                and_(
+                    user_registration.event_id == Event.id,
+                    user_registration.user_id == user_id,
+                    user_registration.status == RegistrationStatus.ACTIVE,
+                ),
+            )
+            .where(
+                Event.event_date > after,
+                # Без активных регистраций строки в active_counts нет, поэтому NULL -> 0
+                func.coalesce(active_counts.c.active_count, 0) < Event.capacity,
+                # Пользователь ещё не записан на мероприятие
+                user_registration.id.is_(None),
+            )
+            .group_by(Event.id)
+            .order_by(Event.event_date, Event.id)
+            .limit(limit)
+        )
+        stmt = self._filter_deleted(stmt, include_deleted=include_deleted)
+
+        result = await self.session.execute(stmt)
+        # array_agg по пустому набору возвращает NULL, а не пустой массив
+        return [
+            (event_id, event_tag_ids or []) 
+            for event_id, event_tag_ids in result.all()
+        ]

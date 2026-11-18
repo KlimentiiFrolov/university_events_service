@@ -1,9 +1,10 @@
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from src.clients.recommendations import RecommendationClient
 from src.core.logger import log
 from src.core.tokens import decode_access_token
 from src.core.uow import UnitOfWork, get_uow
@@ -12,6 +13,7 @@ from src.schemas.exceptions.domain import InvalidTokenError, NotFoundError
 from src.schemas.users import UserResponse
 from src.services.auth import AuthService
 from src.services.events import EventService
+from src.services.recommendations import RecommendationService
 from src.services.registrations import RegistrationService
 from src.services.tags import TagService
 from src.services.users import UserService
@@ -39,11 +41,28 @@ def get_tag_service(uow: UoWDep) -> TagService:
     return TagService(uow=uow)
 
 
+def get_recommendation_client(request: Request) -> RecommendationClient:
+    return request.app.state.recommendation_client
+
+
+RecommendationClientDep = Annotated[RecommendationClient, Depends(get_recommendation_client)]
+
+
+def get_recommendation_service(
+    uow: UoWDep,
+    client: RecommendationClientDep,
+) -> RecommendationService:
+    return RecommendationService(uow=uow, client=client)
+
+
 EventServiceDep = Annotated[EventService, Depends(get_event_service)]
 TagServiceDep = Annotated[TagService, Depends(get_tag_service)]
 RegistrationServiceDep = Annotated[RegistrationService, Depends(get_registration_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service),]
+RecommendationServiceDep = Annotated[
+    RecommendationService, Depends(get_recommendation_service)
+]
 
 
 # auto_error=False отсутствие заголовка обрабатываем сами

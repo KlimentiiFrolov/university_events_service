@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
     app_lifespan = Lifespan()
 
     await app_lifespan.startup()
+    app.state.recommendation_client = app_lifespan.recommendation_client
     yield
     await app_lifespan.shutdown()
 

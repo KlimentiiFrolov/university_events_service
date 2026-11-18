@@ -51,6 +51,7 @@ services:
     depends_on:
       db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      recommendation_service: { condition: service_started }
     networks: [ backend ]
 
   nginx:
@@ -66,12 +67,9 @@ services:
 
   recommendation_service:
     build: ./recommendation_service
-    env_file: ./recommendation_service/.env
     ports:
       - "50051:50051"
-    depends_on:
-      db: { condition: service_healthy }
-    networks: [backend]
+    networks: [ backend ]
 
   notification_service:
     build: ./notification_service
