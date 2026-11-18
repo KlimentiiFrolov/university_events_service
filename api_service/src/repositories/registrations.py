@@ -101,8 +101,8 @@ class RegistrationRepository(BaseRepository[Registration]):
 
         return list(result.all())
 
-    async def cancel_all_active_for_event(self, event_id: int) -> None:
-        await self.session.execute(
+    async def cancel_all_active_for_event(self, event_id: int) -> list[int]:
+        result = await self.session.scalars(
             update(Registration)
             .where(
                 Registration.event_id == event_id,
@@ -112,5 +112,9 @@ class RegistrationRepository(BaseRepository[Registration]):
                 status=RegistrationStatus.CANCELLED,
                 cancelled_at=get_current_datetime(),
             )
+            .returning(Registration.user_id)
         )
+        user_ids = list(result.all())
         await self.session.flush()
+
+        return user_ids
