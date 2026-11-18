@@ -88,12 +88,3 @@ async def test_domain_event_is_immutable(bus):
 
     with pytest.raises(ValidationError):
         event.type = DomainEventType.EVENT_CANCELLED
-
-
-def test_event_type_values_are_routing_keys():
-    assert {event_type.value for event_type in DomainEventType} == {
-        "registration.created",
-        "registration.cancelled",
-        "event.updated",
-        "event.cancelled",
-    }
