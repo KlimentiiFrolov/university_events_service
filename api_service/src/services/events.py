@@ -191,13 +191,18 @@ class EventService:
         self,
         event_id: int,
         organizer_id: int,
-    ) -> None:
+    ) -> list[int]:
+        """Удалить мероприятие и вернуть id участников, чьи регистрации отменены."""
         event = await self._get_event(event_id)
         self._ensure_owner(event, organizer_id)
 
-        await self.uow.registrations.cancel_all_active_for_event(event_id)
+        cancelled_user_ids = await self.uow.registrations.cancel_all_active_for_event(event_id)
 
         event.deleted_at = get_current_datetime()
         await self.uow.events.update(event)
 
-        log.info("Event id=%d deleted by user id=%d", event_id, organizer_id)
+        log.info(
+            "Event id=%d deleted by user id=%d, cancelled %d registration(s)",
+            event_id, organizer_id, len(cancelled_user_ids),
+        )
+        return cancelled_user_ids
