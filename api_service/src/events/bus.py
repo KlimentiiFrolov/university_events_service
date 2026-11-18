@@ -1,7 +1,8 @@
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from src.core.dates import get_current_datetime
 from src.core.logger import log
@@ -22,11 +23,19 @@ class EventBus:
         self,
         event_type: DomainEventType,
         payload: dict[str, Any],
+        *,
+        event_id: UUID | None = None,
+        occurred_at: datetime | None = None,
     ) -> DomainEvent:
+        """Собрать событие и передать его обработчикам.
+
+        Relay передаёт event_id и occurred_at из строки outbox: при повторной обработке
+        той же строки событие получает тот же id.
+        """
         event = DomainEvent(
-            id=uuid4(),
+            id=event_id or uuid4(),
             type=event_type,
-            occurred_at=get_current_datetime(),
+            occurred_at=occurred_at or get_current_datetime(),
             payload=payload,
         )
 
