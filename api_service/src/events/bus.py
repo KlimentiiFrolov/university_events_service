@@ -49,3 +49,13 @@ class EventBus:
             await handler(event)
 
         return event
+
+    def register(self, *event_types: DomainEventType):
+        def decorator(func: EventHandler):
+            for event_type in event_types:
+                self.subscribe(event_type, func)
+
+            return func
+
+        return decorator
+
