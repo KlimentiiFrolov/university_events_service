@@ -57,6 +57,7 @@ class RabbitMQSettings(BaseSettings):
     rabbit_port: Annotated[int, Field(alias="RABBITMQ_PORT")]
     rabbit_user: Annotated[str, Field(alias="RABBITMQ_USER")]
     rabbit_password: Annotated[str, Field(alias="RABBITMQ_PASSWORD")]
+    exchange: Annotated[str, Field(default="university.events", alias="RABBITMQ_EXCHANGE")]
 
     @property
     def rabbitmq_url(self):
