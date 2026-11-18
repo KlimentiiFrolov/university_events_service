@@ -1,9 +1,11 @@
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.dates import get_current_datetime
+from src.events.types import DomainEventType
 from src.models.outbox import OutboxMessage
 
 from .base import BaseRepository
@@ -14,6 +16,18 @@ class OutboxRepository(BaseRepository[OutboxMessage]):
         super().__init__(
             model=OutboxMessage,
             session=session,
+        )
+
+    async def add_event(self, event_type: DomainEventType, payload: BaseModel) -> OutboxMessage:
+        """Записать доменное событие в outbox в текущей транзакции.
+
+        id и created_at заполняются автоматически и дальше служат id и временем события.
+        """
+        return await self.add(
+            OutboxMessage(
+                routing_key=event_type,
+                payload=payload.model_dump(mode="json"),
+            )
         )
 
     async def fetch_unpublished_for_update(self, limit: int) -> list[OutboxMessage]:
