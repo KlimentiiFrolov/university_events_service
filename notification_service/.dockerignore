@@ -4,7 +4,4 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 
-# Настройки передаются через env_file в docker-compose, в образ не попадают
-.env
-
 tests/

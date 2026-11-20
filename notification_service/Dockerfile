@@ -17,5 +17,4 @@ RUN uv sync
 EXPOSE 8001
 
 # Миграции БД уведомлений, затем сервис (consumer + WebSocket)
-RUN uv run alembic upgrade head
-CMD ["sh", "-c", "uv run python -m notifications.main"]
+CMD ["sh", "-c", "uv run alembic upgrade head && uv run python -m notifications.main"]
