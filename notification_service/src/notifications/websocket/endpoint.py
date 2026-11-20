@@ -18,34 +18,9 @@ from notifications.core.config import AuthSettings
 from notifications.core.database import async_session_maker
 from notifications.core.logger import log
 from notifications.core.tokens import InvalidTokenError, decode_access_token
-from notifications.repositories.notifications import NotificationRepository
-from notifications.schemas.websocket import NotificationPayload
 
+from .delivery import push_undelivered
 from .manager import ConnectionManager
-
-
-async def send_undelivered(
-    websocket: WebSocket,
-    user_id: int,
-    session_factory: Callable[[], AsyncSession],
-) -> None:
-    """Дослать уведомления, которые пользователь ещё не получил, и отметить их доставленными.
-
-    Если соединение оборвётся посреди досылки, транзакция откатится и при следующем
-    подключении всё придёт снова (уже полученное - повторно).
-    """
-    async with session_factory() as session, session.begin():
-        repository = NotificationRepository(session)
-        notifications = await repository.list_undelivered(user_id)
-
-        for notification in notifications:
-            payload = NotificationPayload.from_model(notification).model_dump(mode="json")
-            await websocket.send_json(payload)
-
-        await repository.mark_delivered([notification.id for notification in notifications])
-
-    if notifications:
-        log.info("Sent %d undelivered notification(s) to user id=%d", len(notifications), user_id)
 
 
 def build_router(
@@ -75,7 +50,8 @@ def build_router(
         # не потеряется (в худшем случае придёт дважды - клиент отличает по id)
         manager.connect(user_id, websocket)
         try:
-            await send_undelivered(websocket, user_id, session_factory)
+            await push_undelivered(manager, user_id, session_factory)
+
             # Клиент ничего не присылает; чтение нужно, чтобы заметить отключение
             while True:
                 await websocket.receive_text()
