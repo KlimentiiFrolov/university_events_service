@@ -3,7 +3,9 @@ import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from datetime import UTC, datetime
 
+import aio_pika
 import pytest
+from aio_pika.abc import AbstractIncomingMessage, AbstractQueue
 from sqlalchemy import NullPool, insert, select
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -11,8 +13,12 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.waiting_utils import wait_for_logs
 from testcontainers.postgres import PostgresContainer
 
+from src.clients.rabbitmq import RabbitPublisher
+from src.core.config import RabbitMQSettings
 from src.core.logger import log
 from src.core.passwords import hash_password
 from src.core.uow import UnitOfWork
@@ -38,6 +44,77 @@ TEST_PASSWORD_HASH = hash_password(TEST_PASSWORD)
 def postgres_container() -> Generator[PostgresContainer, None, None]:
     with PostgresContainer("postgres:17") as postgres:
         yield postgres
+
+
+RABBITMQ_USER = "test"
+RABBITMQ_PASSWORD = "test"
+
+
+@pytest.fixture(scope="session")
+def rabbitmq_container() -> Generator[DockerContainer, None, None]:
+    container = (
+        DockerContainer("rabbitmq:3-alpine")
+        .with_env("RABBITMQ_DEFAULT_USER", RABBITMQ_USER)
+        .with_env("RABBITMQ_DEFAULT_PASS", RABBITMQ_PASSWORD)
+        .with_exposed_ports(5672)
+    )
+    with container:
+        wait_for_logs(container, "Server startup complete", timeout=120)
+        yield container
+
+
+@pytest.fixture(scope="session")
+def rabbitmq_settings(rabbitmq_container: DockerContainer) -> RabbitMQSettings:
+    # model_construct: настройки не читаются из .env, всё берётся из контейнера
+    return RabbitMQSettings.model_construct(
+        rabbit_protocol="amqp",
+        rabbit_host=rabbitmq_container.get_container_host_ip(),
+        rabbit_port=int(rabbitmq_container.get_exposed_port(5672)),
+        rabbit_user=RABBITMQ_USER,
+        rabbit_password=RABBITMQ_PASSWORD,
+        exchange="test.events",
+    )
+
+
+@pytest.fixture
+async def rabbit_publisher(
+    rabbitmq_settings: RabbitMQSettings,
+) -> AsyncGenerator[RabbitPublisher, None]:
+    publisher = RabbitPublisher(rabbitmq_settings)
+    await publisher.connect()
+    yield publisher
+    await publisher.close()
+
+
+@pytest.fixture
+async def rabbit_queue(
+    rabbitmq_settings: RabbitMQSettings,
+    rabbit_publisher: RabbitPublisher,
+) -> AsyncGenerator[AbstractQueue, None]:
+    """Временная очередь, привязанная ко всем ключам exchange (его объявляет publisher)."""
+    connection = await aio_pika.connect(rabbitmq_settings.rabbitmq_url)
+    channel = await connection.channel()
+    queue = await channel.declare_queue(exclusive=True)
+    await queue.bind(rabbitmq_settings.exchange, routing_key="#")
+    yield queue
+    await connection.close()
+
+
+type ReceiveMessage = Callable[[], Awaitable[AbstractIncomingMessage]]
+
+
+@pytest.fixture
+def receive_message(rabbit_queue: AbstractQueue) -> ReceiveMessage:
+    """Дождаться сообщения во временной очереди (до 5 секунд)."""
+    async def _receive() -> AbstractIncomingMessage:
+        for _ in range(50):
+            message = await rabbit_queue.get(no_ack=True, fail=False)
+            if message is not None:
+                return message
+            await asyncio.sleep(0.1)
+        raise AssertionError("No message in queue")
+
+    return _receive
 
 
 @pytest.fixture(scope="session")
