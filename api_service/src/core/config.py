@@ -67,6 +67,18 @@ class RabbitMQSettings(BaseSettings):
         )
 
 
+class OutboxSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(ENV_TEMPLATE, ENV_FILE),
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    relay_enabled: Annotated[bool, Field(default=True, alias="OUTBOX_RELAY_ENABLED")]
+    poll_interval: Annotated[float, Field(default=1.0, gt=0, alias="OUTBOX_POLL_INTERVAL")]
+    batch_size: Annotated[int, Field(default=100, ge=1, alias="OUTBOX_BATCH_SIZE")]
+
+
 class RecommendationSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(ENV_TEMPLATE, ENV_FILE),
@@ -111,6 +123,7 @@ class Settings(BaseSettings):
     runtime: RuntimeSettings = Field(default_factory=RuntimeSettings) # type: ignore
     database: DatabaseSettings = Field(default_factory=DatabaseSettings) # type: ignore
     rabbitmq: RabbitMQSettings = Field(default_factory=RabbitMQSettings) # type: ignore
+    outbox: OutboxSettings = Field(default_factory=OutboxSettings) # type: ignore
     auth: AuthSettings = Field(default_factory=AuthSettings) # type: ignore
     recommendation: RecommendationSettings = Field(default_factory=RecommendationSettings) # type: ignore
 
