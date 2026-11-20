@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -24,18 +24,13 @@ class Notification(Base):
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
         server_default=func.now(),
     )
     delivered_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-
-    # created_at заполняет БД; eager_defaults возвращает его сразу в INSERT ... RETURNING,
-    # чтобы уведомление можно было отправить клиенту после закрытия сессии
-    __mapper_args__= {
-        "eager_defaults": True,
-    }
 
     __table_args__ = (
         # При подключении досылаются недоставленные уведомления пользователя
