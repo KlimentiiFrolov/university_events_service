@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from notifications.core.config import RabbitMQSettings
 from notifications.lifespan import NotificationLifespan
 
-from ..websocket.test_endpoint import AUTH, make_token
+from ..websocket.test_endpoint import AUTH, bearer, make_token
 from ..websocket.test_manager import FakeWebSocket
 from .conftest import Publish, wait_until
 from .test_notifications_consumer import body
@@ -73,7 +73,10 @@ def test_message_from_broker_reaches_websocket_client(
 
     with (
         TestClient(app) as client,
-        client.websocket_connect(f"/ws/notifications?token={make_token(USER_ID)}") as websocket,
+        client.websocket_connect(
+            "/ws/notifications",
+            headers=bearer(make_token(USER_ID)),
+        ) as websocket,
     ):
         asyncio.run(publish_to_broker())
         # Даже если сообщение обработается раньше регистрации подключения,

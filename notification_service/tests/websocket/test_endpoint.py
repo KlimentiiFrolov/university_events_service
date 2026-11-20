@@ -35,6 +35,10 @@ def make_token(
     return jwt.encode(payload, secret, algorithm=AUTH.algorithm)
 
 
+def bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
 @pytest.fixture
 def app_session_maker(db_url: str, clean_db: None) -> async_sessionmaker[AsyncSession]:
     # NullPool: приложение работает в потоке TestClient со своим event loop,
@@ -120,21 +124,47 @@ def receive_delivered(
 
 
 @pytest.mark.parametrize(
-    "token",
+    "headers",
     [
-        "",
-        "not-a-jwt",
-        make_token(secret="other-secret"),
-        make_token(expires_in=timedelta(minutes=-1)),
-        make_token(token_type="refresh"),
-        make_token(user_id=0),
+        {},
+        {"Authorization": make_token()},
+        {"Authorization": f"Basic {make_token()}"},
+        bearer(""),
+        bearer("not-a-jwt"),
+        bearer(make_token(secret="other-secret")),
+        bearer(make_token(expires_in=timedelta(minutes=-1))),
+        bearer(make_token(token_type="refresh")),
+        bearer(make_token(user_id=0)),
     ],
-    ids=["missing", "garbage", "wrong secret", "expired", "refresh type", "bad subject"],
+    ids=[
+        "no header",
+        "no scheme",
+        "basic scheme",
+        "empty token",
+        "garbage",
+        "wrong secret",
+        "expired",
+        "refresh type",
+        "bad subject",
+    ],
 )
-def test_invalid_token_is_rejected_with_1008(client: TestClient, token: str):
+def test_invalid_authorization_is_rejected_with_1008(
+    client: TestClient,
+    headers: dict[str, str],
+):
     with (
         pytest.raises(WebSocketDisconnect) as error,
-        client.websocket_connect(f"{URL}?token={token}"),
+        client.websocket_connect(URL, headers=headers),
+    ):
+        pass
+
+    assert error.value.code == 1008
+
+
+def test_token_in_query_is_not_accepted(client: TestClient):
+    with (
+        pytest.raises(WebSocketDisconnect) as error,
+        client.websocket_connect(f"{URL}?token={make_token()}"),
     ):
         pass
 
@@ -147,7 +177,7 @@ def test_invalid_token_is_rejected_with_1008(client: TestClient, token: str):
 def test_undelivered_notifications_are_sent_on_connect(client: TestClient, app_session_maker):
     first, second, _ = add_notifications(app_session_maker, USER_ID, USER_ID, OTHER_USER_ID)
 
-    with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
+    with client.websocket_connect(URL, headers=bearer(make_token())) as websocket:
         received = [
             receive_delivered(websocket, app_session_maker),
             receive_delivered(websocket, app_session_maker),
@@ -169,7 +199,7 @@ def test_sent_notifications_are_marked_delivered(client: TestClient, app_session
     ids = add_notifications(app_session_maker, USER_ID)
     notification_id = ids[0]
 
-    with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
+    with client.websocket_connect(URL, headers=bearer(make_token())) as websocket:
         websocket.receive_json()
         wait_until(lambda: is_delivered(app_session_maker, notification_id))
 
@@ -177,13 +207,13 @@ def test_sent_notifications_are_marked_delivered(client: TestClient, app_session
 def test_delivered_notification_is_not_sent_again(client: TestClient, app_session_maker):
     ids = add_notifications(app_session_maker, USER_ID)
     delivered = ids[0]
-    with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
+    with client.websocket_connect(URL, headers=bearer(make_token())) as websocket:
         websocket.receive_json()
         wait_until(lambda: is_delivered(app_session_maker, delivered))
 
     ids = add_notifications(app_session_maker, USER_ID)
     new = ids[0]
-    with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
+    with client.websocket_connect(URL, headers=bearer(make_token())) as websocket:
         message = receive_delivered(websocket, app_session_maker)
 
     assert message["id"] == new
@@ -192,7 +222,7 @@ def test_delivered_notification_is_not_sent_again(client: TestClient, app_sessio
 def test_other_users_notifications_stay_undelivered(client: TestClient, app_session_maker):
     own, foreign = add_notifications(app_session_maker, USER_ID, OTHER_USER_ID)
 
-    with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
+    with client.websocket_connect(URL, headers=bearer(make_token())) as websocket:
         websocket.receive_json()
         wait_until(lambda: is_delivered(app_session_maker, own))
 
@@ -206,7 +236,7 @@ def test_client_message_does_not_close_connection(
 ):
     add_notifications(app_session_maker, USER_ID)
 
-    with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
+    with client.websocket_connect(URL, headers=bearer(make_token())) as websocket:
         receive_delivered(websocket, app_session_maker)
         websocket.send_text("hello")
         time.sleep(0.2)
@@ -223,7 +253,7 @@ def test_connection_is_registered_while_open(
 ):
     add_notifications(app_session_maker, USER_ID)
 
-    with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
+    with client.websocket_connect(URL, headers=bearer(make_token())) as websocket:
         # Досылка идёт после регистрации: раз сообщение пришло, подключение уже в реестре
         receive_delivered(websocket, app_session_maker)
         assert manager.is_connected(USER_ID) is True

@@ -1,4 +1,4 @@
-"""WebSocket-эндпоинт уведомлений: /ws/notifications?token=<access token>."""
+"""WebSocket-эндпоинт уведомлений: /ws/notifications, заголовок Authorization: Bearer <token>."""
 
 from collections.abc import Callable
 from typing import Annotated
@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
-    Query,
+    Header,
     WebSocket,
     WebSocketDisconnect,
     WebSocketException,
@@ -31,10 +31,18 @@ def build_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    async def get_current_user_id(token: Annotated[str, Query()] = "") -> int:
-        """id пользователя из access-токена. Токен в query: браузерный WebSocket
-        не умеет передавать заголовки. Невалидный токен - закрытие с кодом 1008."""
+    async def get_current_user_id(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> int:
+        """id пользователя из заголовка Authorization: Bearer <access token>, как в api_service.
+
+        Нет заголовка, не та схема или невалидный токен - закрытие с кодом 1008.
+        """
         try:
+            scheme, _, token = (authorization or "").partition(" ")
+            if scheme.lower() != "bearer" or not token:
+                raise InvalidTokenError("Missing bearer token")
+
             return decode_access_token(token, auth)
         except InvalidTokenError as error:
             log.warning("WebSocket connection rejected: %s", error)
