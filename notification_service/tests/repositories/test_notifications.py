@@ -2,8 +2,8 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from notifications.models import Notification
-from notifications.repositories.notifications import NotificationRepository
+from src.notifications.models import Notification
+from src.notifications.repositories.notifications import NotificationRepository
 
 USER_ID = 7
 OTHER_USER_ID = 8
