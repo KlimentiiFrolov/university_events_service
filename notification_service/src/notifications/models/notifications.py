@@ -31,6 +31,12 @@ class Notification(Base):
         nullable=True,
     )
 
+    # created_at заполняет БД; eager_defaults возвращает его сразу в INSERT ... RETURNING,
+    # чтобы уведомление можно было отправить клиенту после закрытия сессии
+    __mapper_args__= {
+        "eager_defaults": True,
+    }
+
     __table_args__ = (
         # При подключении досылаются недоставленные уведомления пользователя
         Index(
