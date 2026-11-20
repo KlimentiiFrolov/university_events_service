@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from notifications.consumers.notifications import start_consumer
 from notifications.core.config import RabbitMQSettings
 from notifications.models import Notification
+from notifications.websocket.manager import ConnectionManager
 
+from ..websocket.test_manager import FakeWebSocket
 from .conftest import Publish, wait_until
 
 REGISTRATION_DATA = {
@@ -150,3 +152,29 @@ async def test_failed_processing_is_retried(
     await wait_until(saved)
     await channel.close()
     assert attempts >= 2
+
+
+async def test_saved_notification_is_pushed_to_online_user(
+    publish: Publish,
+    rabbit_connection: AbstractConnection,
+    rabbitmq_settings: RabbitMQSettings,
+    session_maker: async_sessionmaker[AsyncSession],
+):
+    manager = ConnectionManager()
+    websocket = FakeWebSocket()
+    manager.connect(7, websocket)
+    channel = await start_consumer(
+        rabbit_connection,
+        rabbitmq_settings,
+        session_factory=session_maker,
+        manager=manager,
+    )
+
+    await publish(body())
+
+    async def pushed() -> bool:
+        return len(websocket.sent) == 1
+
+    await wait_until(pushed)
+    await channel.close()
+    assert websocket.sent[0]["title"] == "Новая запись на мероприятие"

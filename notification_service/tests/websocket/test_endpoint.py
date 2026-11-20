@@ -2,6 +2,7 @@ import asyncio
 import time
 from collections.abc import Callable, Generator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
 import jwt
@@ -101,6 +102,20 @@ def wait_until(condition: Callable[[], bool], timeout: float = 5.0) -> None:
         time.sleep(0.05)
 
 
+def receive_delivered(
+    websocket,
+    session_maker: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """Получить уведомление и дождаться, пока сервер отметит его доставленным.
+
+    Иначе тест закроет соединение, пока сервер ещё пишет в БД, и TestClient оборвёт
+    запрос asyncpg на остановке своего event loop.
+    """
+    message = websocket.receive_json()
+    wait_until(lambda: is_delivered(session_maker, message["id"]))
+    return message
+
+
 # --- авторизация ---
 
 
@@ -133,7 +148,10 @@ def test_undelivered_notifications_are_sent_on_connect(client: TestClient, app_s
     first, second, _ = add_notifications(app_session_maker, USER_ID, USER_ID, OTHER_USER_ID)
 
     with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
-        received = [websocket.receive_json(), websocket.receive_json()]
+        received = [
+            receive_delivered(websocket, app_session_maker),
+            receive_delivered(websocket, app_session_maker),
+        ]
 
     assert [message["id"] for message in received] == [first, second]
     message = received[0]
@@ -166,7 +184,7 @@ def test_delivered_notification_is_not_sent_again(client: TestClient, app_sessio
     ids = add_notifications(app_session_maker, USER_ID)
     new = ids[0]
     with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
-        message = websocket.receive_json()
+        message = receive_delivered(websocket, app_session_maker)
 
     assert message["id"] == new
 
@@ -189,7 +207,7 @@ def test_client_message_does_not_close_connection(
     add_notifications(app_session_maker, USER_ID)
 
     with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
-        websocket.receive_json()
+        receive_delivered(websocket, app_session_maker)
         websocket.send_text("hello")
         time.sleep(0.2)
         assert manager.is_connected(USER_ID) is True
@@ -207,7 +225,7 @@ def test_connection_is_registered_while_open(
 
     with client.websocket_connect(f"{URL}?token={make_token()}") as websocket:
         # Досылка идёт после регистрации: раз сообщение пришло, подключение уже в реестре
-        websocket.receive_json()
+        receive_delivered(websocket, app_session_maker)
         assert manager.is_connected(USER_ID) is True
 
     wait_until(lambda: not manager.is_connected(USER_ID))
