@@ -1,0 +1,10 @@
+# Локальное окружение собрано под другую ОС, в образе uv ставит своё
+.venv/
+__pycache__/
+.ruff_cache/
+.pytest_cache/
+
+# Настройки передаются через env_file в docker-compose, в образ не попадают
+.env
+
+tests/
