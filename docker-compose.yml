@@ -10,6 +10,7 @@ networks:
 
 volumes:
   pg_data:
+  notifications_pg_data:
   rabbitmq_data:
 
 services:
@@ -25,6 +26,24 @@ services:
     networks: [backend]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U events -d events"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Своя БД сервиса уведомлений: inbox и уведомления пользователей
+  notifications_db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${NOTIFICATIONS_DB_NAME}
+      POSTGRES_USER: ${NOTIFICATIONS_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD}
+    ports:
+      - "${NOTIFICATIONS_DB_PORT}:5432"
+    volumes:
+      - notifications_pg_data:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATIONS_DB_USER} -d ${NOTIFICATIONS_DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -77,6 +96,7 @@ services:
     ports:
       - "8001:8001"
     depends_on:
+      notifications_db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     networks: [backend]
 
