@@ -8,10 +8,11 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.core.config import OutboxSettings
 from src.core.uow import UnitOfWork
 from src.events.types import DomainEventType
 from src.models.outbox import OutboxMessage
-from src.outbox.relay import dispatch, process_batch, save_results
+from src.outbox.relay import dispatch, process_batch, run_relay, save_results
 
 PAYLOAD = {"event_id": 1, "user_id": 2}
 
@@ -254,3 +255,106 @@ async def test_save_results_marks_published_and_failed(
 
 async def test_save_results_with_empty_batch_returns_zero(uow: UnitOfWork):
     assert await save_results(uow, [], []) == 0
+
+
+# --- run_relay ---
+
+
+def relay_config(*, poll_interval: float = 0.05, batch_size: int = 10) -> OutboxSettings:
+    return OutboxSettings.model_construct(
+        relay_enabled=True,
+        poll_interval=poll_interval,
+        batch_size=batch_size,
+        concurrency=5,
+    )
+
+
+async def wait_until(condition: Callable[[], Awaitable[bool]], timeout: float = 5.0) -> None:
+    async def _poll() -> None:
+        while not await condition():
+            await asyncio.sleep(0.01)
+
+    await asyncio.wait_for(_poll(), timeout)
+
+
+async def test_run_relay_processes_events_until_stopped(
+    bus: FakeBus,
+    uow_factory,
+    session_maker,
+    add_outbox_message: AddOutboxMessage,
+):
+    message = await add_outbox_message()
+    stop = asyncio.Event()
+    task = asyncio.create_task(
+        run_relay(stop, relay_config(), bus=bus, uow_factory=uow_factory)
+    )
+
+    async def is_published() -> bool:
+        return (await stored(session_maker, message.id)).published_at is not None
+
+    await wait_until(is_published)
+    stop.set()
+    await asyncio.wait_for(task, timeout=1)
+
+
+async def test_run_relay_stops_after_current_pause(bus: FakeBus, uow_factory):
+    stop = asyncio.Event()
+    task = asyncio.create_task(
+        run_relay(stop, relay_config(poll_interval=0.05), bus=bus, uow_factory=uow_factory)
+    )
+    await asyncio.sleep(0.05)
+
+    stop.set()
+
+    await asyncio.wait_for(task, timeout=1)
+
+
+async def test_run_relay_takes_next_full_batch_without_waiting(
+    bus: FakeBus,
+    uow_factory,
+    add_outbox_message: AddOutboxMessage,
+):
+    await add_outbox_message()
+    await add_outbox_message()
+    stop = asyncio.Event()
+    # Пауза больше таймаута ожидания: оба события успеют уйти, только если паузы между
+    # полными пачками нет
+    config = relay_config(poll_interval=0.5, batch_size=1)
+    task = asyncio.create_task(run_relay(stop, config, bus=bus, uow_factory=uow_factory))
+
+    async def both_sent() -> bool:
+        return len(bus.calls) == 2
+
+    await wait_until(both_sent, timeout=0.3)
+    stop.set()
+    await asyncio.wait_for(task, timeout=1)
+
+
+async def test_run_relay_survives_iteration_error(
+    bus: FakeBus,
+    uow_factory,
+    session_maker,
+    add_outbox_message: AddOutboxMessage,
+):
+    message = await add_outbox_message()
+    attempts = 0
+
+    def flaky_uow_factory() -> UnitOfWork:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise ConnectionError("db is down")
+        return uow_factory()
+
+    stop = asyncio.Event()
+    task = asyncio.create_task(
+        run_relay(stop, relay_config(poll_interval=0.01), bus=bus, uow_factory=flaky_uow_factory)
+    )
+
+    async def is_published() -> bool:
+        return (await stored(session_maker, message.id)).published_at is not None
+
+    await wait_until(is_published)
+    stop.set()
+    await asyncio.wait_for(task, timeout=1)
+    assert attempts >= 2

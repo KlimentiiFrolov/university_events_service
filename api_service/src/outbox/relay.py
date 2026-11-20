@@ -6,6 +6,7 @@
 import asyncio
 from collections.abc import Callable
 
+from src.core.config import OutboxSettings
 from src.core.logger import log
 from src.core.uow import UnitOfWork
 from src.events.bus import EventBus
@@ -82,3 +83,35 @@ async def process_batch(
             published, len(messages) - published,
         )
     return len(messages)
+
+
+async def run_relay(
+    stop_event: asyncio.Event,
+    config: OutboxSettings,
+    *,
+    bus: EventBus = event_bus,
+    uow_factory: Callable[[], UnitOfWork] = UnitOfWork,
+) -> None:
+    """Обрабатывать пачки, пока не выставлен stop_event.
+
+    Полная пачка - сразу берём следующую: в outbox, скорее всего, есть ещё события.
+    Неполная или ошибка - ждём poll_interval. Остановка срабатывает после текущей паузы.
+    """
+    log.info("Outbox relay started")
+
+    while not stop_event.is_set():
+        try:
+            processed = await process_batch(
+                config.batch_size,
+                config.concurrency,
+                bus=bus,
+                uow_factory=uow_factory,
+            )
+        except Exception:  # noqa: BLE001 - например, БД недоступна: relay не должен умирать
+            log.exception("Outbox relay iteration failed")
+            processed = 0
+
+        if processed < config.batch_size:
+            await asyncio.sleep(config.poll_interval)
+
+    log.info("Outbox relay stopped")
