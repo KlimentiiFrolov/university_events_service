@@ -15,6 +15,8 @@ from notifications.core.config import RabbitMQSettings
 from notifications.core.database import async_session_maker
 from notifications.core.logger import log
 from notifications.services.message_processor import ProcessStatus, process_message
+from notifications.websocket.delivery import push_notifications
+from notifications.websocket.manager import ConnectionManager
 
 
 async def declare_topology(channel: AbstractChannel, config: RabbitMQSettings) -> AbstractQueue:
@@ -51,8 +53,9 @@ async def handle_message(
     message: AbstractIncomingMessage,
     *,
     session_factory: Callable[[], AsyncSession] = async_session_maker,
+    manager: ConnectionManager | None = None,
 ) -> None:
-    """Обработать сообщение и ответить брокеру.
+    """Обработать сообщение, ответить брокеру и отправить уведомления тем, кто в сети.
 
     ack - после коммита, поэтому при падении сервиса сообщение придёт снова,
     а inbox отсечёт повтор. Невалидное - reject без возврата: уходит в DLQ.
@@ -67,8 +70,19 @@ async def handle_message(
 
     if result.status == ProcessStatus.INVALID:
         await message.reject(requeue=False)
-    else:
-        await message.ack()
+        return
+
+    await message.ack()
+
+    if manager is None or not result.notifications:
+        return
+
+    # Сообщение уже сохранено и подтверждено: сбой отправки не должен его затронуть,
+    # недоставленные уведомления придут при следующем подключении
+    try:
+        await push_notifications(manager, result.notifications, session_factory)
+    except Exception:  # noqa: BLE001
+        log.exception("Pushing notifications of message id=%s failed", message.message_id)
 
 
 async def start_consumer(
@@ -76,6 +90,7 @@ async def start_consumer(
     config: RabbitMQSettings,
     *,
     session_factory: Callable[[], AsyncSession] = async_session_maker,
+    manager: ConnectionManager | None = None,
 ) -> AbstractChannel:
     """Подписаться на очередь уведомлений. Возвращает канал, закрытие которого
     останавливает consumer."""
@@ -85,7 +100,7 @@ async def start_consumer(
     queue = await declare_topology(channel, config)
 
     async def on_message(message: AbstractIncomingMessage) -> None:
-        await handle_message(message, session_factory=session_factory)
+        await handle_message(message, session_factory=session_factory, manager=manager)
 
     await queue.consume(on_message)
     log.info("Consuming queue %s from exchange %s", config.queue, config.exchange)
