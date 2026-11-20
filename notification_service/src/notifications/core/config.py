@@ -40,6 +40,21 @@ class RabbitMQSettings(BaseSettings):
     rabbit_password: Annotated[str, Field(alias="RABBITMQ_PASSWORD")]
     exchange: Annotated[str, Field(default="university.events", alias="RABBITMQ_EXCHANGE")]
     queue: Annotated[str, Field(default="notifications", alias="NOTIFICATION_QUEUE")]
+    # Какие события api_service нужны сервису уведомлений
+    routing_keys: Annotated[
+        list[str],
+        Field(default=["registration.*", "event.*"], alias="NOTIFICATION_ROUTING_KEYS"),
+    ]
+    # Сколько неподтверждённых сообщений брокер отдаёт consumer'у одновременно
+    prefetch_count: Annotated[int, Field(default=10, ge=1, alias="NOTIFICATION_PREFETCH_COUNT")]
+
+    @property
+    def dead_letter_exchange(self) -> str:
+        return f"{self.queue}.dlx"
+
+    @property
+    def dead_letter_queue(self) -> str:
+        return f"{self.queue}.dlq"
 
     @property
     def rabbitmq_url(self) -> str:
