@@ -127,6 +127,7 @@ async def test_failed_event_stays_unpublished(
     failed = await stored(session_maker, message.id)
     assert failed.published_at is None
     assert failed.attempts == 1
+    assert failed.last_error is not None
     assert "handler failed" in failed.last_error
 
 
@@ -247,6 +248,7 @@ async def test_save_results_marks_published_and_failed(
     failed = await stored(session_maker, broken.id)
     assert failed.published_at is None
     assert failed.attempts == 1
+    assert failed.last_error is not None
     assert "handler failed" in failed.last_error
 
 
