@@ -11,7 +11,7 @@ from .base import Base
 
 
 class Notification(Base):
-    """Уведомление конкретному пользователю. delivered_at выставляется по ack клиента."""
+    """Уведомление конкретному пользователю. delivered_at - когда отправлено клиенту."""
 
     __tablename__ = "notifications"
 

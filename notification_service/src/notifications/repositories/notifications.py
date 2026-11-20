@@ -25,16 +25,16 @@ class NotificationRepository:
         )
         return list(result.all())
 
-    async def mark_delivered(self, notification_id: int, user_id: int) -> bool:
-        """Отметить доставленным. False - чужое, несуществующее или уже доставленное."""
-        result = await self.session.execute(
+    async def mark_delivered(self, notification_ids: list[int]) -> None:
+        """Отметить отправленные клиенту уведомления, чтобы не досылать их снова."""
+        if not notification_ids:
+            return
+
+        await self.session.execute(
             update(Notification)
             .where(
-                Notification.id == notification_id,
-                Notification.user_id == user_id,
+                Notification.id.in_(notification_ids),
                 Notification.delivered_at.is_(None),
             )
             .values(delivered_at=func.now())
-            .returning(Notification.id)
         )
-        return result.scalar_one_or_none() is not None
