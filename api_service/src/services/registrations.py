@@ -1,6 +1,8 @@
 from src.core.dates import get_current_datetime
 from src.core.logger import log
 from src.core.uow import UnitOfWork
+from src.events.payloads import RegistrationCancelledPayload, RegistrationCreatedPayload
+from src.events.types import DomainEventType
 from src.models.events import Event
 from src.models.registrations import (
     Registration,
@@ -147,6 +149,11 @@ class RegistrationService:
 
         registration = await self.uow.registrations.add(registration)
 
+        await self.uow.outbox.add_event(
+            DomainEventType.REGISTRATION_CREATED,
+            RegistrationCreatedPayload(event_id=event_id, user_id=user_id),
+        )
+
         log.info("User id=%d registered on event id=%d", user_id, event_id)
         return RegistrationResponse.model_validate(registration)
 
@@ -170,6 +177,11 @@ class RegistrationService:
         registration.cancelled_at = get_current_datetime()
 
         registration = await self.uow.registrations.update(registration)
+
+        await self.uow.outbox.add_event(
+            DomainEventType.REGISTRATION_CANCELLED,
+            RegistrationCancelledPayload(event_id=event_id, user_id=user_id),
+        )
 
         log.info("User id=%d cancelled registration on event id=%d", user_id, event_id)
         return RegistrationResponse.model_validate(registration)
@@ -199,6 +211,11 @@ class RegistrationService:
         registration.cancelled_at = None
 
         registration = await self.uow.registrations.update(registration)
+
+        await self.uow.outbox.add_event(
+            DomainEventType.REGISTRATION_CREATED,
+            RegistrationCreatedPayload(event_id=event_id, user_id=user_id),
+        )
 
         log.info("User id=%d re-registered on event id=%d", user_id, event_id)
         return RegistrationResponse.model_validate(registration)

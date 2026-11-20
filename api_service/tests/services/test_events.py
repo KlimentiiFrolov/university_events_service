@@ -450,6 +450,34 @@ async def test_delete_event_cancels_active_registrations(
     assert registrations[0].status == RegistrationStatus.CANCELLED
 
 
+async def test_delete_event_returns_only_active_participants(
+    event_service: EventService,
+    registration_service: RegistrationService,
+    make_event,
+    make_user,
+):
+    event = await make_event()
+    active = await make_user()
+    already_cancelled = await make_user()
+
+    await registration_service.register(active.id, event.id)
+    await registration_service.register(already_cancelled.id, event.id)
+    await registration_service.cancel(already_cancelled.id, event.id)
+
+    cancelled_user_ids = await event_service.delete_event(event.id, event.created_by_id)
+
+    assert cancelled_user_ids == [active.id]
+
+
+async def test_delete_event_without_participants_returns_empty_list(
+    event_service: EventService,
+    make_event,
+):
+    event = await make_event()
+
+    assert await event_service.delete_event(event.id, event.created_by_id) == []
+
+
 async def test_get_event_raises_not_found_for_deleted_event(
     event_service: EventService,
     make_event,
