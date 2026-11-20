@@ -8,9 +8,11 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.clients.rabbitmq import RabbitPublisher
 from src.core.config import OutboxSettings
 from src.core.uow import UnitOfWork
-from src.events.types import DomainEventType
+from src.events.bus import EventBus
+from src.events.types import DomainEvent, DomainEventType
 from src.models.outbox import OutboxMessage
 from src.outbox.relay import dispatch, process_batch, run_relay, save_results
 
@@ -358,3 +360,57 @@ async def test_run_relay_survives_iteration_error(
     stop.set()
     await asyncio.wait_for(task, timeout=1)
     assert attempts >= 2
+
+
+# --- relay + RabbitMQ ---
+
+
+@pytest.fixture
+def rabbit_bus(rabbit_publisher: RabbitPublisher) -> EventBus:
+    """Шина с одним обработчиком, который отправляет событие в настоящий RabbitMQ."""
+    bus = EventBus()
+
+    @bus.register(DomainEventType.REGISTRATION_CREATED)
+    async def send(event: DomainEvent) -> None:
+        await rabbit_publisher.publish(
+            routing_key=event.type,
+            body=event.model_dump_json().encode(),
+            message_id=event.id,
+        )
+
+    return bus
+
+
+async def test_relay_delivers_outbox_event_to_rabbitmq(
+    rabbit_bus: EventBus,
+    uow_factory,
+    session_maker,
+    add_outbox_message: AddOutboxMessage,
+    receive_message,
+):
+    outbox_message = await add_outbox_message()
+
+    await process_batch(10, 5, bus=rabbit_bus, uow_factory=uow_factory)
+
+    received = await receive_message()
+    assert received.routing_key == DomainEventType.REGISTRATION_CREATED
+    assert received.message_id == str(outbox_message.id)
+    assert DomainEvent.model_validate_json(received.body).payload == PAYLOAD
+    assert (await stored(session_maker, outbox_message.id)).published_at is not None
+
+
+async def test_relay_keeps_event_when_broker_is_unavailable(
+    rabbit_bus: EventBus,
+    rabbit_publisher: RabbitPublisher,
+    uow_factory,
+    session_maker,
+    add_outbox_message: AddOutboxMessage,
+):
+    outbox_message = await add_outbox_message()
+    await rabbit_publisher.close()
+
+    await process_batch(10, 5, bus=rabbit_bus, uow_factory=uow_factory)
+
+    failed = await stored(session_maker, outbox_message.id)
+    assert failed.published_at is None
+    assert failed.attempts == 1
