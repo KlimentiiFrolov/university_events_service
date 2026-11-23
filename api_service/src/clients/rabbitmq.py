@@ -17,8 +17,14 @@ class RabbitPublisher:
 
     async def connect(self) -> None:
         self._connection = await aio_pika.connect_robust(self._config.rabbitmq_url)
-        # publisher_confirms=True: publish() ждёт подтверждения от брокера
-        channel = await self._connection.channel(publisher_confirms=True)
+        # publisher_confirms=True: publish() ждёт подтверждения от брокера.
+        # on_return_raises=True: если сообщение некуда положить (к exchange не привязана
+        # ни одна очередь), брокер его возвращает и publish() бросает исключение -
+        # иначе сообщение молча пропало бы, а relay отметил бы его отправленным
+        channel = await self._connection.channel(
+            publisher_confirms=True,
+            on_return_raises=True,
+        )
         self._exchange = await channel.declare_exchange(
             self._config.exchange,
             aio_pika.ExchangeType.TOPIC,
@@ -43,6 +49,7 @@ class RabbitPublisher:
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
             ),
             routing_key=routing_key,
+            mandatory=True,
         )
 
 

@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import aio_pika
 import pytest
+from aio_pika.exceptions import DeliveryError
 
 from src.clients.rabbitmq import RabbitPublisher
 from src.core.config import RabbitMQSettings
@@ -36,3 +37,13 @@ async def test_publish_without_connect_raises(rabbitmq_settings: RabbitMQSetting
 
 async def test_close_without_connect_does_nothing(rabbitmq_settings: RabbitMQSettings):
     await RabbitPublisher(rabbitmq_settings).close()
+
+
+async def test_publish_without_bound_queue_raises(rabbit_publisher: RabbitPublisher):
+    # Очередь к exchange не привязана (фикстура rabbit_queue не используется)
+    with pytest.raises(DeliveryError):
+        await rabbit_publisher.publish(
+            routing_key="registration.created",
+            body=b"{}",
+            message_id=uuid4(),
+        )
