@@ -5,6 +5,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.core.uow import UnitOfWork
+from src.events.payloads import RegistrationCreatedPayload
+from src.events.types import DomainEventType
 from src.models.outbox import OutboxMessage
 from src.repositories.outbox import OutboxRepository
 
@@ -41,6 +43,19 @@ async def test_add_assigns_defaults(make_message: MakeMessage):
     assert message.attempts == 0
     assert message.published_at is None
     assert message.last_error is None
+
+
+async def test_add_event_stores_type_and_payload(uow: UnitOfWork):
+    message = await uow.outbox.add_event(
+        DomainEventType.REGISTRATION_CREATED,
+        RegistrationCreatedPayload(event_id=12, user_id=5),
+    )
+
+    assert message.id is not None
+    assert message.created_at is not None
+    assert message.routing_key == DomainEventType.REGISTRATION_CREATED
+    assert message.payload == {"event_id": 12, "user_id": 5}
+    assert message.published_at is None
 
 
 async def test_fetch_returns_unpublished_in_creation_order(

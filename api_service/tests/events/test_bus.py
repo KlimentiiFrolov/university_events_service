@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -60,6 +61,20 @@ async def test_publish_builds_event(bus, monkeypatch):
 
     assert event.type == DomainEventType.REGISTRATION_CANCELLED
     assert event.payload == PAYLOAD
+    assert event.occurred_at == FIXED_NOW
+
+
+async def test_publish_uses_given_id_and_time(bus):
+    event_id = uuid4()
+
+    event = await bus.publish(
+        DomainEventType.EVENT_UPDATED,
+        PAYLOAD,
+        event_id=event_id,
+        occurred_at=FIXED_NOW,
+    )
+
+    assert event.id == event_id
     assert event.occurred_at == FIXED_NOW
 
 
