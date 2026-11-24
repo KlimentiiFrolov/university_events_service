@@ -101,9 +101,9 @@ services:
       rabbitmq: { condition: service_healthy }
     networks: [backend]
 
-  notification_client:
-    build: ./notification_client
-    env_file: ./notification_client/.env
-    depends_on:
-      notification_service: { condition: service_started }
-    networks: [backend]
+  # notification_client:
+  #   build: ./notification_client
+  #   env_file: ./notification_client/.env
+  #   depends_on:
+  #     notification_service: { condition: service_started }
+  #   networks: [backend]
