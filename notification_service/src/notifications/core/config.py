@@ -92,6 +92,8 @@ class AuthSettings(BaseSettings):
 
     secret_key: Annotated[str, Field(alias="JWT_SECRET")]
     algorithm: Annotated[str, Field(alias="JWT_ALGORITHM")]
+    # Срок жизни одноразового тикета на подключение к WebSocket
+    ws_ticket_ttl_seconds: Annotated[int, Field(default=60, gt=0, alias="WS_TICKET_TTL_SECONDS")]
 
 
 class Settings(BaseSettings):
