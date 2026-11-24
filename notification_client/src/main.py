@@ -11,6 +11,8 @@ from pydantic import SecretStr, ValidationError
 from .client import AuthenticationError, run_client
 from .core.config import ClientSettings
 
+logger = logging.getLogger(__name__)
+
 
 def prompt_for_credentials() -> tuple[str, str]:
     """Ask for credentials on a terminal; never echo the password."""
@@ -56,10 +58,10 @@ def main() -> None:
         settings = resolve_credentials(ClientSettings())
         asyncio.run(run_client(settings))
     except (AuthenticationError, RuntimeError, ValidationError) as error:
-        logging.error("Client stopped: %s", error)
+        logger.error("Client stopped: %s", error)
         raise SystemExit(1) from error
     except KeyboardInterrupt:
-        logging.info("Notification client stopped")
+        logger.info("Notification client stopped")
 
 
 if __name__ == "__main__":
