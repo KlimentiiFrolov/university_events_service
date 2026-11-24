@@ -1,0 +1,58 @@
+name: CI notification_client pipeline
+
+on:
+    pull_request:
+        paths:
+            - 'notification_client/**'
+            - '.github/workflows/ci_notification_client.yaml'
+    push:
+        branches:
+            - main
+        paths:
+            - 'notification_client/**'
+            - '.github/workflows/ci_notification_client.yaml'
+
+defaults:
+    run:
+        working-directory: notification_client
+
+jobs:
+    lint:
+        name: Lint (ruff)
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: notification_client/uv.lock
+
+            - name: Install dependencies
+              run: uv sync --locked
+
+            - name: Ruff check
+              run: uv run ruff check --output-format=github .
+
+    test:
+        name: Tests (pytest)
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v6
+              with:
+                  enable-cache: true
+                  cache-dependency-glob: notification_client/uv.lock
+
+            - name: Install dependencies
+              run: uv sync --locked
+
+            - name: Run tests
+              run: uv run pytest tests

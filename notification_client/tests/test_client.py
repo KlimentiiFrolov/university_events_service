@@ -107,6 +107,7 @@ async def test_connect_sends_bearer_header_and_receives_message():
     from contextlib import suppress
 
     from websockets.asyncio.server import serve
+
     from src.client import run_client
 
     received = asyncio.Event()
