@@ -7,14 +7,13 @@ from collections.abc import Callable
 
 import aio_pika
 from aio_pika.abc import AbstractChannel, AbstractRobustConnection
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from notifications.consumers.notifications import start_consumer
-from notifications.core.config import AuthSettings, RabbitMQSettings
+from notifications.core.config import RabbitMQSettings
 from notifications.core.database import async_session_maker, engine
 from notifications.core.logger import log
-from notifications.websocket.endpoint import build_router
 from notifications.websocket.manager import ConnectionManager
 from notifications.websocket.tickets import TicketStore
 
@@ -41,9 +40,6 @@ class NotificationLifespan:
         Один ключ, а не по ключу на объект: в режиме embedded app.state общий с api_service.
         """
         app.state.notifications = self
-
-    def build_router(self, auth: AuthSettings) -> APIRouter:
-        return build_router(self.manager, auth, session_factory=self.session_factory)
 
     async def start(self) -> None:
         self._connection = await aio_pika.connect_robust(self._rabbitmq.rabbitmq_url)
