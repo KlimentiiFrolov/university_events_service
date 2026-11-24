@@ -62,6 +62,14 @@ def test_invalid_ws_endpoint_is_rejected():
         )
 
 
+def test_invalid_ticket_endpoint_is_rejected():
+    with pytest.raises(ValidationError, match="NOTIFICATION_TICKET_URL"):
+        ClientSettings(
+            notification_ticket_url="ws://localhost:8001/ws/tickets",
+            notification_token=SecretStr("jwt"),
+        )
+
+
 def test_password_without_email_is_rejected():
     with pytest.raises(ValidationError, match="Set both"):
         ClientSettings(

@@ -5,7 +5,12 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from src.client import AuthenticationError, consume_notifications, obtain_access_token
+from src.client import (
+    AuthenticationError,
+    consume_notifications,
+    obtain_access_token,
+    obtain_ws_ticket,
+)
 from src.core.config import ClientSettings
 from src.schemas import RecentNotificationIds
 
@@ -61,6 +66,42 @@ async def test_static_token_fallback():
         assert await obtain_access_token(settings, client) == "test-token"
 
 
+@pytest.mark.asyncio
+async def test_obtain_ticket_exchanges_access_token(settings):
+    received = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        return httpx.Response(201, json={"ticket": "one-time-ticket", "expires_in": 60})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        assert await obtain_ws_ticket(settings, client, "sample.jwt") == "one-time-ticket"
+
+    assert len(received) == 1
+    assert received[0].method == "POST"
+    assert str(received[0].url) == settings.notification_ticket_url
+    assert received[0].headers["Authorization"] == "Bearer sample.jwt"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [401, 403])
+async def test_rejected_access_token_gets_no_ticket(settings, status_code):
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(status_code))
+    ) as client:
+        with pytest.raises(AuthenticationError, match="rejected the access token"):
+            await obtain_ws_ticket(settings, client, "expired.jwt")
+
+
+@pytest.mark.asyncio
+async def test_missing_ticket_endpoint_fails_fast(settings):
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(404))
+    ) as client:
+        with pytest.raises(RuntimeError, match="NOTIFICATION_TICKET_URL"):
+            await obtain_ws_ticket(settings, client, "sample.jwt")
+
+
 def payload(notification_id: int) -> str:
     return json.dumps(
         {
@@ -101,7 +142,7 @@ def test_recent_ids_are_bounded():
 
 
 @pytest.mark.asyncio
-async def test_connect_sends_bearer_header_and_receives_message():
+async def test_connect_sends_ticket_header_and_receives_message():
     """Real WebSocket handshake over localhost; no RabbitMQ or Docker required."""
     import asyncio
     from contextlib import suppress
@@ -123,6 +164,12 @@ async def test_connect_sends_bearer_header_and_receives_message():
         displayed.append(text)
         received.set()
 
+    ticket_requests = []
+
+    def issue_ticket(request: httpx.Request) -> httpx.Response:
+        ticket_requests.append(request.headers["Authorization"])
+        return httpx.Response(201, json={"ticket": "one-time-ticket", "expires_in": 60})
+
     async with serve(handler, "127.0.0.1", 0) as server:
         port = server.sockets[0].getsockname()[1]
         settings = ClientSettings(
@@ -131,7 +178,13 @@ async def test_connect_sends_bearer_header_and_receives_message():
             notification_email=None,
             notification_password=None,
         )
-        task = asyncio.create_task(run_client(settings, display=capture_output))
+        task = asyncio.create_task(
+            run_client(
+                settings,
+                display=capture_output,
+                http_transport=httpx.MockTransport(issue_ticket),
+            )
+        )
         try:
             await asyncio.wait_for(received.wait(), timeout=3)
         finally:
@@ -139,7 +192,9 @@ async def test_connect_sends_bearer_header_and_receives_message():
             with suppress(asyncio.CancelledError):
                 await task
 
-    assert auth_headers == ["Bearer my-access-jwt"]
+    # The access token goes only to the ticket endpoint; the WebSocket gets the ticket
+    assert ticket_requests == ["Bearer my-access-jwt"]
+    assert auth_headers == ["Bearer one-time-ticket"]
     assert len(displayed) == 1
     assert "Уведомление #42" in displayed[0]
     assert "Новая регистрация" in displayed[0]

@@ -17,6 +17,8 @@ class ClientSettings(BaseSettings):
     )
 
     notification_ws_url: str = "ws://notification_service:8001/ws/notifications"
+    # Same service as NOTIFICATION_WS_URL: tickets are only valid where they were issued
+    notification_ticket_url: str = "http://notification_service:8001/ws/tickets"
     api_base_url: str = "http://api_service:8000"
     notification_email: str | None = None
     notification_password: SecretStr | None = None
@@ -29,6 +31,9 @@ class ClientSettings(BaseSettings):
         parsed = urlsplit(self.notification_ws_url)
         if parsed.scheme not in ("ws", "wss") or not parsed.hostname:
             raise ValueError("NOTIFICATION_WS_URL must be a valid ws:// or wss:// URL")
+        ticket = urlsplit(self.notification_ticket_url)
+        if ticket.scheme not in ("http", "https") or not ticket.hostname:
+            raise ValueError("NOTIFICATION_TICKET_URL must be a valid http:// or https:// URL")
         api = urlsplit(self.api_base_url)
         if api.scheme not in ("http", "https") or not api.hostname:
             raise ValueError("API_BASE_URL must be a valid http:// or https:// URL")

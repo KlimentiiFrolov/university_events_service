@@ -46,6 +46,31 @@ async def obtain_access_token(settings: ClientSettings, client: httpx.AsyncClien
     raise AuthenticationError("Missing login credentials or access token")
 
 
+class WsTicketResponse(BaseModel):
+    ticket: str
+
+
+async def obtain_ws_ticket(
+    settings: ClientSettings,
+    client: httpx.AsyncClient,
+    access_token: str,
+) -> str:
+    """Exchange the access token for a one-time WebSocket ticket."""
+    response = await client.post(
+        settings.notification_ticket_url,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    if response.status_code in (401, 403):
+        raise AuthenticationError("Notification service rejected the access token")
+    if response.status_code == 404:
+        raise RuntimeError("Ticket endpoint not found; check NOTIFICATION_TICKET_URL")
+    response.raise_for_status()
+    try:
+        return WsTicketResponse.model_validate(response.json()).ticket
+    except (ValidationError, ValueError) as error:
+        raise AuthenticationError("Notification service returned no valid ticket") from error
+
+
 async def consume_notifications(
     messages: AsyncIterable[str | bytes],
     seen: RecentNotificationIds,
@@ -69,20 +94,23 @@ async def run_client(
     settings: ClientSettings,
     *,
     display: Callable[[str], None] = print,
+    http_transport: httpx.AsyncBaseTransport | None = None,
 ) -> None:
-    """Keep a WebSocket connection alive, renewing the JWT on each reconnect."""
+    """Keep a WebSocket connection alive, renewing the JWT and ticket on each reconnect."""
     seen = RecentNotificationIds()
     delay = settings.reconnect_initial_seconds
 
     # The HTTP client is owned by the application, not by obtain_access_token().
     # Reuse its connection pool across reconnects, and close it on shutdown.
-    async with httpx.AsyncClient(timeout=10.0) as http_client:
+    async with httpx.AsyncClient(timeout=10.0, transport=http_transport) as http_client:
         while True:
             try:
                 token = await obtain_access_token(settings, http_client)
+                # Tickets are single-use and short-lived: get a fresh one for every connect
+                ticket = await obtain_ws_ticket(settings, http_client, token)
                 async with connect(
                     settings.notification_ws_url,
-                    additional_headers={"Authorization": f"Bearer {token}"},
+                    additional_headers={"Authorization": f"Bearer {ticket}"},
                     open_timeout=10,
                     ping_interval=20,
                     ping_timeout=20,
@@ -93,8 +121,10 @@ async def run_client(
                     log.info("WebSocket closed normally")
             except InvalidStatus as error:
                 if error.response.status_code in (401, 403):
+                    # The ticket was just issued, so this is a misconfiguration, not expiry
                     raise AuthenticationError(
-                        "WebSocket authentication rejected; check JWT / credentials"
+                        "WebSocket rejected the ticket; check that NOTIFICATION_TICKET_URL "
+                        "and NOTIFICATION_WS_URL point to the same service"
                     ) from error
                 if error.response.status_code == 404:
                     raise RuntimeError(
