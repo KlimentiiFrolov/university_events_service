@@ -36,9 +36,6 @@ class ClientSettings(BaseSettings):
             raise ValueError("RECONNECT_MAX_SECONDS must be >= RECONNECT_INITIAL_SECONDS")
         if bool(self.notification_email) != bool(self.notification_password):
             raise ValueError("Set both NOTIFICATION_EMAIL and NOTIFICATION_PASSWORD")
-        if not (self.notification_email and self.notification_password) and not self.notification_token:
-            raise ValueError(
-                "Configure NOTIFICATION_EMAIL and NOTIFICATION_PASSWORD, "
-                "or NOTIFICATION_TOKEN in notification_client/.env"
-            )
+        # When no credentials are configured, main.py prompts for them in a terminal.
+        # Docker/non-interactive runs must still supply credentials via the environment.
         return self

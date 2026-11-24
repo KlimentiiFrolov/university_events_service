@@ -22,20 +22,17 @@ def settings() -> ClientSettings:
 
 
 @pytest.mark.asyncio
-async def test_obtain_token_posts_real_login_payload(monkeypatch, settings):
+async def test_obtain_token_posts_real_login_payload(settings):
     received = []
 
     def handle(request: httpx.Request) -> httpx.Response:
         received.append(request)
         return httpx.Response(200, json={"access_token": "sample.jwt", "token_type": "bearer"})
 
-    # Use an in-memory transport to validate our outgoing HTTP request.
-    class FakeClient(httpx.AsyncClient):
-        def __init__(self, **kwargs):
-            super().__init__(transport=httpx.MockTransport(handle), **kwargs)
+    # Inject an HTTP client with an in-memory transport. No monkeypatch required.
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        assert await obtain_access_token(settings, client) == "sample.jwt"
 
-    monkeypatch.setattr("src.client.httpx.AsyncClient", FakeClient)
-    assert await obtain_access_token(settings) == "sample.jwt"
     assert len(received) == 1
     assert received[0].url.path == "/api/v1/auth/login"
     assert json.loads(received[0].content) == {
@@ -45,14 +42,12 @@ async def test_obtain_token_posts_real_login_payload(monkeypatch, settings):
 
 
 @pytest.mark.asyncio
-async def test_invalid_credentials_fail_fast(monkeypatch, settings):
-    class FakeClient(httpx.AsyncClient):
-        def __init__(self, **kwargs):
-            super().__init__(transport=httpx.MockTransport(lambda _: httpx.Response(401)), **kwargs)
-
-    monkeypatch.setattr("src.client.httpx.AsyncClient", FakeClient)
-    with pytest.raises(AuthenticationError, match="credentials"):
-        await obtain_access_token(settings)
+async def test_invalid_credentials_fail_fast(settings):
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(401))
+    ) as client:
+        with pytest.raises(AuthenticationError, match="credentials"):
+            await obtain_access_token(settings, client)
 
 
 @pytest.mark.asyncio
@@ -62,7 +57,8 @@ async def test_static_token_fallback():
         notification_email=None,
         notification_password=None,
     )
-    assert await obtain_access_token(settings) == "test-token"
+    async with httpx.AsyncClient() as client:
+        assert await obtain_access_token(settings, client) == "test-token"
 
 
 def payload(notification_id: int) -> str:
@@ -105,7 +101,7 @@ def test_recent_ids_are_bounded():
 
 
 @pytest.mark.asyncio
-async def test_connect_sends_bearer_header_and_receives_message(monkeypatch):
+async def test_connect_sends_bearer_header_and_receives_message():
     """Real WebSocket handshake over localhost; no RabbitMQ or Docker required."""
     import asyncio
     from contextlib import suppress
@@ -114,7 +110,7 @@ async def test_connect_sends_bearer_header_and_receives_message(monkeypatch):
     from src.client import run_client
 
     received = asyncio.Event()
-    sent = []
+    displayed = []
     auth_headers = []
 
     async def handler(websocket):
@@ -122,13 +118,9 @@ async def test_connect_sends_bearer_header_and_receives_message(monkeypatch):
         await websocket.send(payload(42))
         await websocket.wait_closed()
 
-    async def capture(messages, seen):
-        async for raw in messages:
-            sent.append(raw)
-            received.set()
-            return
-
-    monkeypatch.setattr("src.client.consume_notifications", capture)
+    def capture_output(text: str) -> None:
+        displayed.append(text)
+        received.set()
 
     async with serve(handler, "127.0.0.1", 0) as server:
         port = server.sockets[0].getsockname()[1]
@@ -138,7 +130,7 @@ async def test_connect_sends_bearer_header_and_receives_message(monkeypatch):
             notification_email=None,
             notification_password=None,
         )
-        task = asyncio.create_task(run_client(settings))
+        task = asyncio.create_task(run_client(settings, display=capture_output))
         try:
             await asyncio.wait_for(received.wait(), timeout=3)
         finally:
@@ -147,4 +139,6 @@ async def test_connect_sends_bearer_header_and_receives_message(monkeypatch):
                 await task
 
     assert auth_headers == ["Bearer my-access-jwt"]
-    assert json.loads(sent[0])["id"] == 42
+    assert len(displayed) == 1
+    assert "Уведомление #42" in displayed[0]
+    assert "Новая регистрация" in displayed[0]
