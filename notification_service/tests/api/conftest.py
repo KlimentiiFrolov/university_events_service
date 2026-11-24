@@ -6,14 +6,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import NullPool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# Импорт через notifications, а не src.notifications: роутеры ссылаются на
-# notifications.dependencies, и подмена из другого пути импорта не сработала бы
+# Импорт через notifications, а не src.notifications: роутеры ссылаются на notifications.*,
+# и объекты из другого пути импорта были бы другими экземплярами
 from notifications.api import main_router
 from notifications.core.config import RabbitMQSettings
-from notifications.dependencies import get_auth_settings
 from notifications.lifespan import NotificationLifespan
-
-from ..tokens import AUTH
 
 
 @pytest.fixture
@@ -36,7 +33,6 @@ def notification_lifespan(
 def client(notification_lifespan: NotificationLifespan) -> Generator[TestClient, None, None]:
     app = FastAPI()
     app.include_router(main_router)
-    app.dependency_overrides[get_auth_settings] = lambda: AUTH
     notification_lifespan.bind(app)
     with TestClient(app) as test_client:
         yield test_client

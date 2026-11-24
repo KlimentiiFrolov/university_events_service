@@ -1,12 +1,15 @@
-"""Access-токены как у api_service - для тестов авторизации."""
+"""Access-токены как у api_service - для тестов авторизации.
+
+Подписываются тем же settings.auth, которым их проверяет сервис.
+"""
 
 from datetime import UTC, datetime, timedelta
 
 import jwt
 
-from src.notifications.core.config import AuthSettings
+from src.notifications.core.config import settings
 
-AUTH = AuthSettings.model_construct(secret_key="test-secret", algorithm="HS256")
+AUTH = settings.auth
 USER_ID = 7
 
 

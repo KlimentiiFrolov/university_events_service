@@ -10,10 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from notifications.api import main_router
 from notifications.core.config import RabbitMQSettings
-from notifications.dependencies import get_auth_settings
 from notifications.lifespan import NotificationLifespan
 
-from ..tokens import AUTH, bearer, make_token
+from ..tokens import bearer, make_token
 from ..websocket.test_manager import FakeWebSocket
 from .conftest import Publish, wait_until
 from .test_notifications_consumer import body
@@ -65,7 +64,6 @@ def test_message_from_broker_reaches_websocket_client(
 
     app = FastAPI(lifespan=lifespan)
     app.include_router(main_router)
-    app.dependency_overrides[get_auth_settings] = lambda: AUTH
     notification_lifespan.bind(app)
 
     async def publish_to_broker() -> None:

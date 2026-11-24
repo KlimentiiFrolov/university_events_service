@@ -6,11 +6,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from src.notifications.core.config import RabbitMQSettings
-from src.notifications.dependencies import CurrentUserIdDep, WsUserIdDep, get_auth_settings
+from src.notifications.dependencies import CurrentUserIdDep, WsUserIdDep
 from src.notifications.lifespan import NotificationLifespan
 from src.notifications.websocket.tickets import TicketStore
 
-from .tokens import AUTH, USER_ID, bearer, make_token
+from .tokens import USER_ID, bearer, make_token
 
 WS_URL = "/ws"
 
@@ -40,7 +40,6 @@ def client(notification_lifespan: NotificationLifespan) -> Generator[TestClient,
         await websocket.send_json({"user_id": user_id})
         await websocket.close()
 
-    app.dependency_overrides[get_auth_settings] = lambda: AUTH
     notification_lifespan.bind(app)
     with TestClient(app) as test_client:
         yield test_client
