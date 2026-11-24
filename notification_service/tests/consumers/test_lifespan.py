@@ -8,10 +8,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import NullPool
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from notifications.api import main_router
 from notifications.core.config import RabbitMQSettings
+from notifications.dependencies import get_auth_settings
 from notifications.lifespan import NotificationLifespan
 
-from ..websocket.test_endpoint import AUTH, bearer, make_token
+from ..tokens import AUTH, bearer, make_token
 from ..websocket.test_manager import FakeWebSocket
 from .conftest import Publish, wait_until
 from .test_notifications_consumer import body
@@ -62,7 +64,9 @@ def test_message_from_broker_reaches_websocket_client(
         await notification_lifespan.stop()
 
     app = FastAPI(lifespan=lifespan)
-    app.include_router(notification_lifespan.build_router(AUTH))
+    app.include_router(main_router)
+    app.dependency_overrides[get_auth_settings] = lambda: AUTH
+    notification_lifespan.bind(app)
 
     async def publish_to_broker() -> None:
         connection = await aio_pika.connect(rabbitmq_settings.rabbitmq_url)
@@ -71,17 +75,15 @@ def test_message_from_broker_reaches_websocket_client(
             exchange = await channel.get_exchange(rabbitmq_settings.exchange)
             await exchange.publish(aio_pika.Message(body=body()), routing_key="registration.created")
 
-    with (
-        TestClient(app) as client,
-        client.websocket_connect(
-            "/ws/notifications",
-            headers=bearer(make_token(USER_ID)),
-        ) as websocket,
-    ):
-        asyncio.run(publish_to_broker())
-        # Даже если сообщение обработается раньше регистрации подключения,
-        # уведомление придёт досылкой недоставленного
-        message = websocket.receive_json()
+    with TestClient(app) as client:
+        response = client.post("/ws/tickets", headers=bearer(make_token(USER_ID)))
+        ticket = response.json()["ticket"]
+
+        with client.websocket_connect("/ws/notifications", headers=bearer(ticket)) as websocket:
+            asyncio.run(publish_to_broker())
+            # Даже если сообщение обработается раньше регистрации подключения,
+            # уведомление придёт досылкой недоставленного
+            message = websocket.receive_json()
 
     assert message["type"] == "notification"
     assert message["title"] == "Новая запись на мероприятие"
