@@ -9,7 +9,8 @@ ENV UV_NO_DEV=1 \
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock* ./
+# Client previously had no uv.lock; uv resolves dependencies during the build.
+COPY pyproject.toml README.md ./
 RUN uv sync --no-install-project
 
 COPY . /app
