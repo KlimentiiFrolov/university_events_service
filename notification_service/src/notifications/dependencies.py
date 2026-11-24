@@ -12,19 +12,12 @@ from fastapi.requests import HTTPConnection
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from notifications.core.config import AuthSettings, settings
+from notifications.core.config import settings
 from notifications.core.logger import log
 from notifications.core.tokens import InvalidTokenError, decode_access_token
 from notifications.lifespan import NotificationLifespan
 from notifications.websocket.manager import ConnectionManager
 from notifications.websocket.tickets import TicketStore
-
-
-def get_auth_settings() -> AuthSettings:
-    return settings.auth
-
-
-AuthSettingsDep = Annotated[AuthSettings, Depends(get_auth_settings)]
 
 
 def get_notification_lifespan(connection: HTTPConnection) -> NotificationLifespan:
@@ -64,14 +57,13 @@ def _unauthorized(detail: str) -> HTTPException:
 
 def get_current_user_id(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-    auth: AuthSettingsDep,
 ) -> int:
     """id пользователя из заголовка Authorization: Bearer <access token>."""
     if credentials is None:
         raise _unauthorized("Not authenticated")
 
     try:
-        return decode_access_token(credentials.credentials, auth)
+        return decode_access_token(credentials.credentials, settings.auth)
     except InvalidTokenError as error:
         # Причину пишем только в лог: клиенту подробности проверки токена не нужны
         log.warning("Access token rejected: %s", error)

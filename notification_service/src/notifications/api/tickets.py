@@ -1,6 +1,7 @@
 from fastapi import APIRouter, status
 
-from notifications.dependencies import AuthSettingsDep, CurrentUserIdDep, TicketStoreDep
+from notifications.core.config import settings
+from notifications.dependencies import CurrentUserIdDep, TicketStoreDep
 from notifications.schemas.tickets import WsTicketResponse
 
 router = APIRouter(
@@ -13,8 +14,8 @@ router = APIRouter(
 async def issue_ticket(
     user_id: CurrentUserIdDep,
     tickets: TicketStoreDep,
-    auth: AuthSettingsDep,
 ) -> WsTicketResponse:
     """Обменять access-токен на одноразовый тикет для подключения к /ws/notifications."""
-    ticket = tickets.issue(user_id, auth.ws_ticket_ttl_seconds)
-    return WsTicketResponse(ticket=ticket, expires_in=auth.ws_ticket_ttl_seconds)
+    ttl_seconds = settings.auth.ws_ticket_ttl_seconds
+    ticket = tickets.issue(user_id, ttl_seconds)
+    return WsTicketResponse(ticket=ticket, expires_in=ttl_seconds)
